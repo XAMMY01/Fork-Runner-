@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Fork Runner"
+description = "A polished, playable endless-runner game where players jump over approaching fork obstacles, chase a high score, and retry instantly after a collision."
+version = "1.0.0"
+id = "artifacts/fork-runner"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18492
+
+[services.development]
+run = "pnpm --filter @workspace/fork-runner run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fork-runner", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/fork-runner/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18492"
+BASE_PATH = "/"

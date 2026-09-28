@@ -1,10 +1,11 @@
-# [Project name]
+# Fork Runner
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Fork Runner is a responsive endless-runner browser game where players jump over approaching fork hazards and chase a high score.
 
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/fork-runner run dev` — run the game preview
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -22,23 +23,31 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/fork-runner/src/App.tsx` — game state, requestAnimationFrame loop, physics, collision detection, controls, and canvas rendering
+- `artifacts/fork-runner/src/index.css` — responsive full-viewport game shell, HUD, overlays, buttons, and motion
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The game runs entirely in the browser with no backend, database, auth, or external runtime dependencies.
+- Canvas is used for the active scene so parallax, particles, obstacles, and character motion stay lightweight.
+- React owns overlay/HUD state while mutable frame-by-frame game data stays in refs to avoid rerendering every animation frame.
+- Best distance is persisted locally so the game remains personal without requiring accounts.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Start instantly with a button, Space, click, or touch.
+- Jump over original fork-shaped hazards with responsive keyboard and touch controls.
+- Survive an accelerating run, see live distance, and retry immediately after a collision.
+- Responsive layout prevents page scrolling and works across desktop, tablet, and mobile.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the game original and lightweight; do not copy Chrome Dinosaur artwork, branding, or UI.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The game workflow provides `PORT` and `BASE_PATH`; run it through the managed workflow or use the artifact preview rather than starting Vite without those variables.
+- `body` and `.runner-app` intentionally hide overflow and set `touch-action: none` so mobile play does not scroll the page.
 
 ## Pointers
 
