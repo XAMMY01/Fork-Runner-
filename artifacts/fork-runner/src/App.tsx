@@ -54,21 +54,62 @@ type DifficultyProfile = {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
+const GRAVITY = 2250;
+const JUMP_VELOCITY = 825;
+const JUMP_FLIGHT_TIME = (JUMP_VELOCITY * 2) / GRAVITY;
+const PATTERN_MARGIN = 0.055;
+
+const getSafeAirborneWindow = (obstacleHeight: number) => {
+  // Collision uses the player's feet, so this is the amount of vertical
+  // clearance needed before the fork's collision height is reached.
+  const clearance = Math.max(5, obstacleHeight - 5);
+  const discriminant = Math.max(
+    0,
+    JUMP_VELOCITY ** 2 - 2 * GRAVITY * clearance,
+  );
+  const root = Math.sqrt(discriminant);
+  return {
+    start: (JUMP_VELOCITY - root) / GRAVITY,
+    end: (JUMP_VELOCITY + root) / GRAVITY,
+  };
+};
+
+const isPatternAchievable = (
+  offsets: number[],
+  speed: number,
+  forkWidth: number,
+  obstacleHeight: number,
+) => {
+  const safeWindow = getSafeAirborneWindow(obstacleHeight);
+  const lastOffset = offsets[offsets.length - 1] ?? 0;
+  const patternTime = (lastOffset + forkWidth) / speed;
+  const minimumSeparation = forkWidth + 18;
+
+  return (
+    offsets.every(
+      (offset, index) =>
+        index === 0 || offset - offsets[index - 1] >= minimumSeparation,
+    ) &&
+    patternTime <= safeWindow.end - safeWindow.start - PATTERN_MARGIN
+  );
+};
+
 const getDifficulty = (score: number): DifficultyProfile => {
   const level = score < 60 ? 1 : score < 140 ? 2 : score < 240 ? 3 : score < 380 ? 4 : 5;
-  const speed = 320 + Math.min(350, score * 1.65);
-  const spawnGaps = [
-    [1.34, 2.18],
-    [1.16, 1.92],
-    [1.02, 1.7],
-    [0.9, 1.5],
-    [0.82, 1.34],
-  ][level - 1];
+  const speed = 290 + 235 * (1 - Math.exp(-score / 390));
+  const spawnGaps: Array<[number, number]> = [
+    [1.5, 2.3],
+    [1.32, 2.08],
+    [1.18, 1.88],
+    [1.06, 1.7],
+    [0.96, 1.58],
+  ];
+  const [minSpawnGap, maxSpawnGap] = spawnGaps[level - 1] ?? spawnGaps[0];
   return {
     level,
     speed,
-    minSpawnGap: spawnGaps[0],
-    maxSpawnGap: spawnGaps[1],
+    minSpawnGap,
+    maxSpawnGap,
   };
 };
 
@@ -86,7 +127,7 @@ const makeGame = (best = 0): GameData => ({
   score: 0,
   best,
   spawnClock: 0,
-  nextSpawn: 1.32,
+  nextSpawn: 1.48,
   obstacles: [],
   dust: [],
   landingPulse: 0,
@@ -446,7 +487,7 @@ const isColliding = (game: GameData, obstacle: Obstacle) => {
 const stepGame = (game: GameData, delta: number): GameEvent => {
   const dt = Math.min(delta, 0.034);
   game.elapsed += dt;
-  const scoreRate = 10 + Math.min(2.2, game.elapsed / 52);
+  const scoreRate = 9.5 + Math.min(1.6, game.elapsed / 70);
   game.score = Math.floor(game.elapsed * scoreRate);
   const difficulty = getDifficulty(game.score);
   const speed = difficulty.speed;
@@ -456,8 +497,8 @@ const stepGame = (game: GameData, delta: number): GameEvent => {
   game.spawnClock += dt;
   if (game.spawnClock >= game.nextSpawn) {
     const largeFork =
-      difficulty.level >= 3 &&
-      Math.random() < 0.06 + (difficulty.level - 3) * 0.035;
+      difficulty.level >= 4 &&
+      Math.random() < 0.045 + (difficulty.level - 4) * 0.035;
     const forkWidth = clamp(game.width * 0.045, 33, 50) + (largeFork ? 5 : 0);
     const obstacleHeight = clamp(
       55 + Math.random() * 23 + game.score * 0.025 + (largeFork ? 8 : 0),
@@ -466,32 +507,42 @@ const stepGame = (game: GameData, delta: number): GameEvent => {
     );
     const firstX = game.width + 42;
     const patternRoll = Math.random();
-    let offsets = [0];
+    const candidates: number[][] = [[0]];
 
-    if (difficulty.level === 2 && patternRoll < 0.32) {
-      offsets = [0, 166 + Math.random() * 28];
+    if (difficulty.level === 2 && patternRoll < 0.24) {
+      candidates.unshift([0, 112 + Math.random() * 18]);
     } else if (difficulty.level === 3) {
-      if (patternRoll < 0.34) offsets = [0, 125 + Math.random() * 30];
-      else if (patternRoll < 0.52) {
-        offsets = [0, 105 + Math.random() * 20, 230 + Math.random() * 30];
+      if (patternRoll < 0.2) {
+        candidates.unshift([0, 68 + Math.random() * 10, 138 + Math.random() * 14]);
+      } else if (patternRoll < 0.52) {
+        candidates.unshift([0, 112 + Math.random() * 18]);
       }
     } else if (difficulty.level === 4) {
-      if (patternRoll < 0.3) {
-        offsets = [0, 95 + Math.random() * 25, 190 + Math.random() * 30];
-      } else if (patternRoll < 0.58) {
-        offsets = [0, 124 + Math.random() * 26];
-      } else if (patternRoll < 0.72) {
-        offsets = [0, 92 + Math.random() * 14, 184 + Math.random() * 18, 276 + Math.random() * 20];
+      if (patternRoll < 0.2) {
+        candidates.unshift([0, 72 + Math.random() * 12, 145 + Math.random() * 15]);
+      } else if (patternRoll < 0.55) {
+        candidates.unshift([0, 108 + Math.random() * 18]);
       }
     } else if (difficulty.level === 5) {
-      if (patternRoll < 0.34) {
-        offsets = [0, 80 + Math.random() * 18, 162 + Math.random() * 26];
-      } else if (patternRoll < 0.58) {
-        offsets = [0, 104 + Math.random() * 20, 215 + Math.random() * 24, 328 + Math.random() * 24];
-      } else if (patternRoll < 0.78) {
-        offsets = [0, 120 + Math.random() * 24];
+      if (patternRoll < 0.13) {
+        candidates.unshift([
+          0,
+          56 + Math.random() * 8,
+          114 + Math.random() * 12,
+          171 + Math.random() * 14,
+        ]);
+      } else if (patternRoll < 0.36) {
+        candidates.unshift([0, 76 + Math.random() * 12, 153 + Math.random() * 16]);
+      } else if (patternRoll < 0.65) {
+        candidates.unshift([0, 106 + Math.random() * 18]);
       }
     }
+
+    const validationHeight = Math.min(96, obstacleHeight + 5);
+    const offsets =
+      candidates.find((candidate) =>
+        isPatternAchievable(candidate, speed, forkWidth, validationHeight),
+      ) ?? [0];
 
     offsets.forEach((offset, index) => {
       game.obstacles.push({
@@ -508,7 +559,11 @@ const stepGame = (game: GameData, delta: number): GameEvent => {
 
     game.spawnClock = 0;
     const patternEnd = offsets[offsets.length - 1] + forkWidth;
-    const landingBuffer = difficulty.level < 3 ? 0.9 : 0.78;
+    const safeWindow = getSafeAirborneWindow(validationHeight);
+    const landingBuffer = Math.max(
+      0.7,
+      JUMP_FLIGHT_TIME - safeWindow.start + 0.12,
+    );
     const clearTime = patternEnd / speed + landingBuffer;
     const randomGap =
       difficulty.minSpawnGap +
@@ -518,7 +573,7 @@ const stepGame = (game: GameData, delta: number): GameEvent => {
     game.nextSpawn = Math.max(randomGap, clearTime);
   }
 
-  game.velocityY += 2250 * dt;
+  game.velocityY += GRAVITY * dt;
   game.playerY += game.velocityY * dt;
   const floorY = game.groundY - game.playerH;
   let event: GameEvent = null;
@@ -626,7 +681,7 @@ function App() {
     }
     const game = gameRef.current;
     if (game.playerOnGround) {
-      game.velocityY = -825;
+      game.velocityY = -JUMP_VELOCITY;
       game.playerOnGround = false;
       spawnDust(game, 2);
       playSound('jump');

@@ -1,0 +1,65 @@
+Upgrade the existing Fork Runner game to V3: GAMEPLAY BALANCE.
+
+IMPORTANT: Inspect the existing code before making changes. Modify the current game; do not rebuild it from scratch, replace its design, or remove working features.
+
+The current version accelerates too quickly, and a difficult double/triple-fork combination around the fourth jump can feel nearly impossible. Fix these problems while keeping the game challenging, responsive, and enjoyable.
+
+1. REDUCE GAME SPEED AND ACCELERATION
+
+* Reduce the current starting obstacle speed slightly.
+* Make speed increase much more gradually over time and score.
+* Reduce the current acceleration rate substantially.
+* Lower the maximum speed to a sensible, achievable limit.
+* Avoid sudden speed jumps when entering difficulty stages.
+* Use a smooth progression curve rather than aggressive linear acceleration.
+* The player should have time to learn the rhythm before the game becomes demanding.
+* Keep late-game difficulty challenging without making the game feel ridiculously fast.
+
+2. FIX UNFAIR DOUBLE/TRIPLE-FORK SEQUENCES
+
+* Specifically investigate and fix the difficult fork combination occurring around the fourth jump.
+* Do not simply remove all double or triple forks.
+* Keep these combinations, but make them strategic and realistically survivable.
+* Never spawn a sequence that requires the player to jump again while they are still airborne if the existing jump mechanics do not allow it.
+* Account for actual jump duration, horizontal obstacle speed, player collision dimensions, landing time, and reaction time.
+* Ensure sufficient landing and recovery time between obstacles.
+* Avoid overlapping forks and unavoidable consecutive collisions.
+* Use controlled obstacle patterns instead of unrestricted random placement.
+* Validate every double/triple sequence against the actual movement and jump mechanics before spawning it.
+* If a pattern cannot be cleared reliably, increase its spacing or use a simpler pattern.
+
+3. FAIR DIFFICULTY PROGRESSION
+
+* Keep single forks common in the early game.
+* Introduce double forks gradually.
+* Introduce triple forks only when the player has had enough time to learn the game.
+* Increase challenge through timing and carefully designed patterns, not just excessive speed.
+* Maintain a reasonable minimum reaction window.
+* Difficulty should increase smoothly and predictably.
+* Do not make every obstacle sequence harder than the previous one.
+* Include occasional easier sequences so the player can recover and prepare.
+
+4. PRESERVE THE GAME
+
+* Keep the existing sunset/purple desert aesthetic.
+* Preserve the current character, controls, start screen, Game Over screen, Retry button, score, and high-score persistence.
+* Keep desktop keyboard controls and mobile touch controls working.
+* Do not introduce coins, power-ups, skins, or new environments in this version. Those are planned for later updates.
+* Do not add a backend, database, or unnecessary dependencies.
+
+5. TEST THE ACTUAL GAME
+
+* Test the opening sequence, especially the first five jumps.
+* Verify that the problematic fourth-jump sequence is fixed.
+* Test single, double, and triple-fork patterns.
+* Test at early, middle, and late difficulty levels.
+* Confirm that every generated pattern is physically achievable with the existing jump mechanics.
+* Check that Retry resets the game correctly.
+* Check mobile touch and desktop keyboard controls.
+* Fix any bugs or console errors.
+
+The desired result is a game that starts comfortably, gets harder slowly, and eventually becomes genuinely challenging through skillful obstacle design.
+
+Do not make the game easy overall. Make it FAIR.
+
+Implement the changes directly, run the game, and report what was changed and tested.
