@@ -19,6 +19,8 @@ type DustParticle = {
   size: number;
 };
 
+type GameEvent = 'land' | 'hit' | null;
+
 type GameData = {
   width: number;
   height: number;
@@ -36,6 +38,10 @@ type GameData = {
   nextSpawn: number;
   obstacles: Obstacle[];
   dust: DustParticle[];
+  landingPulse: number;
+  impactPulse: number;
+  impactX: number;
+  impactY: number;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -58,6 +64,10 @@ const makeGame = (best = 0): GameData => ({
   nextSpawn: 1.32,
   obstacles: [],
   dust: [],
+  landingPulse: 0,
+  impactPulse: 0,
+  impactX: 0,
+  impactY: 0,
 });
 
 const roundedRect = (
@@ -157,6 +167,30 @@ const drawFork = (
   context.restore();
 };
 
+const drawCactus = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+) => {
+  context.save();
+  context.globalAlpha = 0.35;
+  context.strokeStyle = '#332445';
+  context.lineWidth = 7 * scale;
+  context.lineCap = 'round';
+  context.beginPath();
+  context.moveTo(x, y);
+  context.lineTo(x, y - 27 * scale);
+  context.moveTo(x, y - 13 * scale);
+  context.lineTo(x - 9 * scale, y - 18 * scale);
+  context.lineTo(x - 9 * scale, y - 25 * scale);
+  context.moveTo(x, y - 7 * scale);
+  context.lineTo(x + 10 * scale, y - 13 * scale);
+  context.lineTo(x + 10 * scale, y - 20 * scale);
+  context.stroke();
+  context.restore();
+};
+
 const drawRunner = (context: CanvasRenderingContext2D, game: GameData) => {
   const { playerX: x, playerY: y, playerW: width, playerH: height } = game;
   const runCycle = Math.sin(game.elapsed * 18);
@@ -186,6 +220,10 @@ const drawRunner = (context: CanvasRenderingContext2D, game: GameData) => {
   roundedRect(context, width * 0.2, height * 0.3, width * 0.61, height * 0.49, 8);
   context.fill();
 
+  context.fillStyle = '#f08a66';
+  roundedRect(context, width * 0.25, height * 0.38, width * 0.1, height * 0.25, 4);
+  context.fill();
+
   context.fillStyle = '#f5bc62';
   context.beginPath();
   context.arc(width * 0.51, height * 0.24, width * 0.27, 0, Math.PI * 2);
@@ -212,6 +250,13 @@ const drawRunner = (context: CanvasRenderingContext2D, game: GameData) => {
   context.beginPath();
   context.arc(width * 0.22, height * 0.55, width * 0.1, 0, Math.PI * 2);
   context.fill();
+
+  context.strokeStyle = '#a6d3bf';
+  context.lineWidth = Math.max(2, width * 0.07);
+  context.beginPath();
+  context.moveTo(width * 0.3, height * 0.67);
+  context.lineTo(width * 0.65, height * 0.67);
+  context.stroke();
   context.restore();
 };
 
@@ -288,6 +333,11 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   context.closePath();
   context.fill();
 
+  const detailShift = (game.elapsed * 42) % 180;
+  for (let index = -1; index < width / 180 + 2; index += 1) {
+    drawCactus(context, index * 180 - detailShift + 52, groundY - 4, index % 2 === 0 ? 0.8 : 0.55);
+  }
+
   context.fillStyle = '#2b1d3c';
   context.fillRect(0, groundY, width, height - groundY);
   context.fillStyle = 'rgba(245, 188, 98, .22)';
@@ -310,6 +360,28 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
     context.fill();
   }
   context.globalAlpha = 1;
+
+  if (game.landingPulse > 0) {
+    const radius = 16 + (1 - game.landingPulse) * 27;
+    context.globalAlpha = game.landingPulse * 0.48;
+    context.strokeStyle = '#f5bc62';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.ellipse(game.playerX + game.playerW * 0.5, groundY + 2, radius, radius * 0.22, 0, 0, Math.PI * 2);
+    context.stroke();
+    context.globalAlpha = 1;
+  }
+
+  if (game.impactPulse > 0) {
+    const radius = 18 + (1 - game.impactPulse) * 80;
+    context.globalAlpha = game.impactPulse * 0.42;
+    context.strokeStyle = '#fff1d5';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(game.impactX, game.impactY, radius, 0, Math.PI * 2);
+    context.stroke();
+    context.globalAlpha = 1;
+  }
 
   for (const obstacle of game.obstacles) drawFork(context, obstacle, groundY);
   drawRunner(context, game);
@@ -345,30 +417,51 @@ const isColliding = (game: GameData, obstacle: Obstacle) => {
   );
 };
 
-const stepGame = (game: GameData, delta: number) => {
+const stepGame = (game: GameData, delta: number): GameEvent => {
   const dt = Math.min(delta, 0.034);
   game.elapsed += dt;
   game.score = Math.floor(game.elapsed * 10);
-  const speed = 290 + Math.min(270, game.score * 1.65);
+  const speed = 300 + Math.min(290, game.score * 1.7);
+  game.landingPulse = Math.max(0, game.landingPulse - dt * 3.8);
+  game.impactPulse = Math.max(0, game.impactPulse - dt * 2.8);
 
   game.spawnClock += dt;
   if (game.spawnClock >= game.nextSpawn) {
-    const obstacleHeight = clamp(54 + Math.random() * 25 + game.score * 0.025, 53, 86);
+    const forkWidth = clamp(game.width * 0.045, 33, 50);
+    const obstacleHeight = clamp(55 + Math.random() * 23 + game.score * 0.025, 54, 88);
+    const firstX = game.width + 42;
     game.obstacles.push({
-      x: game.width + 42,
-      width: clamp(game.width * 0.042, 31, 48),
+      x: firstX,
+      width: forkWidth,
       height: obstacleHeight,
       lean: (Math.random() - 0.5) * 0.08,
     });
+
+    // Once the player has a little room to learn, occasionally use a
+    // readable two-fork rhythm. The gap is always inside one jump arc.
+    const canUsePattern = game.score > 75 && Math.random() < 0.2;
+    if (canUsePattern) {
+      game.obstacles.push({
+        x: firstX + 132 + Math.random() * 34,
+        width: forkWidth,
+        height: clamp(obstacleHeight - 8 + Math.random() * 8, 50, 82),
+        lean: (Math.random() - 0.5) * 0.08,
+      });
+    }
     game.spawnClock = 0;
-    game.nextSpawn = clamp(1.18 + Math.random() * 0.9 - game.score * 0.002, 0.92, 2.02);
+    game.nextSpawn = clamp(1.3 + Math.random() * 0.88 - game.score * 0.0015, 1.03, 2.15);
   }
 
-  game.velocityY += 2150 * dt;
+  game.velocityY += 2250 * dt;
   game.playerY += game.velocityY * dt;
   const floorY = game.groundY - game.playerH;
+  let event: GameEvent = null;
   if (game.playerY >= floorY) {
-    if (!game.playerOnGround) spawnDust(game, 5);
+    if (!game.playerOnGround) {
+      spawnDust(game, 7);
+      game.landingPulse = 1;
+      event = 'land';
+    }
     game.playerY = floorY;
     game.velocityY = 0;
     game.playerOnGround = true;
@@ -388,12 +481,21 @@ const stepGame = (game: GameData, delta: number) => {
   game.dust = game.dust.filter((particle) => particle.life > 0);
   if (game.playerOnGround && Math.random() < dt * 5.5) spawnDust(game, 1);
 
-  return game.obstacles.some((obstacle) => isColliding(game, obstacle));
+  const hitObstacle = game.obstacles.find((obstacle) => isColliding(game, obstacle));
+  if (hitObstacle) {
+    game.impactPulse = 1;
+    game.impactX = game.playerX + game.playerW * 0.7;
+    game.impactY = game.playerY + game.playerH * 0.45;
+    spawnDust(game, 10);
+    return 'hit';
+  }
+  return event;
 };
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<GameData>(makeGame());
+  const audioRef = useRef<AudioContext | null>(null);
   const shownScoreRef = useRef(0);
   const [runState, setRunState] = useState<RunState>('idle');
   const [score, setScore] = useState(0);
@@ -402,6 +504,37 @@ function App() {
     const stored = Number(window.localStorage.getItem('fork-runner-best') ?? 0);
     return Number.isFinite(stored) ? stored : 0;
   });
+
+  const playSound = useCallback((kind: 'jump' | 'land' | 'hit' | 'ui') => {
+    if (typeof window === 'undefined') return;
+    const AudioContextClass = window.AudioContext || (window as typeof window & {
+      webkitAudioContext?: typeof AudioContext;
+    }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const audio = audioRef.current ?? new AudioContextClass();
+    audioRef.current = audio;
+    if (audio.state === 'suspended') void audio.resume();
+
+    const settings = {
+      jump: { frequency: 410, endFrequency: 680, duration: 0.12, type: 'triangle' as OscillatorType, volume: 0.045 },
+      land: { frequency: 150, endFrequency: 105, duration: 0.09, type: 'sine' as OscillatorType, volume: 0.035 },
+      hit: { frequency: 125, endFrequency: 54, duration: 0.22, type: 'sawtooth' as OscillatorType, volume: 0.055 },
+      ui: { frequency: 520, endFrequency: 650, duration: 0.07, type: 'sine' as OscillatorType, volume: 0.03 },
+    }[kind];
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    const now = audio.currentTime;
+    oscillator.type = settings.type;
+    oscillator.frequency.setValueAtTime(settings.frequency, now);
+    oscillator.frequency.exponentialRampToValueAtTime(settings.endFrequency, now + settings.duration);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(settings.volume, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + settings.duration);
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.start(now);
+    oscillator.stop(now + settings.duration + 0.02);
+  }, []);
 
   const resetAndStart = useCallback(() => {
     const current = gameRef.current;
@@ -417,7 +550,8 @@ function App() {
     shownScoreRef.current = 0;
     setScore(0);
     setRunState('running');
-  }, [bestScore]);
+    playSound('ui');
+  }, [bestScore, playSound]);
 
   const performJumpOrStart = useCallback(() => {
     if (runState !== 'running') {
@@ -426,11 +560,12 @@ function App() {
     }
     const game = gameRef.current;
     if (game.playerOnGround) {
-      game.velocityY = -790;
+      game.velocityY = -825;
       game.playerOnGround = false;
       spawnDust(game, 2);
+      playSound('jump');
     }
-  }, [resetAndStart, runState]);
+  }, [playSound, resetAndStart, runState]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -485,14 +620,16 @@ function App() {
         animationFrame = requestAnimationFrame(animate);
         return;
       }
-      const hit = stepGame(game, (now - previousTime) / 1000);
+       const event = stepGame(game, (now - previousTime) / 1000);
       previousTime = now;
       drawWorld(game, context);
       if (game.score !== shownScoreRef.current) {
         shownScoreRef.current = game.score;
         setScore(game.score);
       }
-      if (hit) {
+       if (event === 'land') playSound('land');
+       if (event === 'hit') {
+         playSound('hit');
         game.best = Math.max(game.best, game.score);
         setBestScore(game.best);
         window.localStorage.setItem('fork-runner-best', String(game.best));
@@ -504,7 +641,7 @@ function App() {
 
     animationFrame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationFrame);
-  }, [runState]);
+   }, [playSound, runState]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -569,7 +706,7 @@ function App() {
             </button>
             <div className="key-hint">
               <span className="key-cap">Space</span>
-              <span>or tap to hop</span>
+               <span>or tap to jump</span>
             </div>
           </section>
         </>
@@ -588,14 +725,14 @@ function App() {
         <>
           <div className="screen-scrim" aria-hidden="true" />
           <section className="game-over-card" aria-live="polite" data-testid="game-over-overlay">
-            <div className="game-over-kicker">The forks caught up</div>
-            <h2 className="game-over-title">Nice run.</h2>
+             <div className="game-over-kicker">The forks caught up</div>
+             <h2 className="game-over-title">Game Over</h2>
             <div className="result-row">
               <div className="result-stat">
                 <span className="result-number" data-testid="text-final-score">
                   {String(score).padStart(4, '0')}
                 </span>
-                <span className="result-label">Distance</span>
+                 <span className="result-label">Score</span>
               </div>
               <div className="result-stat">
                 <span className="result-number" data-testid="text-final-best">
@@ -604,14 +741,14 @@ function App() {
                 <span className="result-label">Best</span>
               </div>
             </div>
-            <p className="game-over-note">One more lap?</p>
+             <p className="game-over-note">Ready for another run?</p>
             <button
               className="retry-button"
               type="button"
               data-testid="button-retry"
               onClick={resetAndStart}
             >
-              Run it back
+               Retry
             </button>
             <div className="key-hint">
               <span className="key-cap">Space</span>

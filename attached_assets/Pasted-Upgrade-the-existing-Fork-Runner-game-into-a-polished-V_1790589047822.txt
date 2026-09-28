@@ -1,0 +1,150 @@
+Upgrade the existing Fork Runner game into a polished V2. Do NOT rebuild the project from scratch and do NOT remove working functionality. Inspect the existing code first, then improve the current implementation.
+
+Keep the existing core concept: the character automatically runs, the player jumps over fork obstacles, collision causes Game Over, and Retry starts a new run.
+
+Make these improvements:
+
+1. GAMEPLAY POLISH
+
+* Make the player’s character slightly larger and easier to see.
+* Make jumping feel smooth and responsive with a natural jump arc.
+* Add proper gravity and smooth landing.
+* Allow both tapping/clicking and Space to jump.
+* Prevent accidental double-jumps unless the character is actually designed to support them.
+* Make collision detection accurate but slightly forgiving so near-misses feel fair.
+* Gradually increase game speed as the score increases.
+* Increase difficulty progressively without making the game unfair.
+* Introduce subtle variations in fork obstacle spacing and patterns.
+* Never generate an impossible obstacle sequence.
+
+2. VISUAL POLISH
+    Keep the current sunset/purple desert aesthetic because it gives Fork Runner its own identity.
+
+Improve:
+
+* Player character design
+* Fork obstacle design
+* Ground
+* Background scenery
+* Clouds
+* Desert silhouettes
+* Small environmental details
+
+Add subtle parallax movement to background elements so the world feels like it is moving while the player runs.
+
+Add smooth animations for:
+
+* Running
+* Jumping
+* Landing
+* Collision
+
+Add a subtle landing effect and small particles when appropriate.
+
+3. HUD
+    Create a clean modern HUD showing:
+
+* Current score
+* High score
+
+Store the high score locally using localStorage so it remains after refreshing the page.
+
+Make the score visually clear without covering gameplay.
+
+4. START SCREEN
+    Create a polished start state instead of immediately beginning the game.
+
+Show:
+FORK RUNNER
+
+Then:
+“TAP TO START”
+“SPACE TO JUMP”
+
+Allow the player to start by tapping/clicking or pressing Space.
+
+5. GAME OVER
+    When the player hits a fork:
+
+* Stop all gameplay immediately.
+* Stop obstacle movement.
+* Stop the score.
+* Trigger a subtle impact effect.
+* Show a polished Game Over overlay.
+
+Display:
+GAME OVER
+Score: [score]
+Best: [high score]
+
+Then provide a large:
+RETRY
+
+button.
+
+Retry must completely reset the game state and immediately allow a new run.
+
+6. MOBILE EXPERIENCE
+    Optimize the game specifically for mobile phones such as iPhone.
+
+* Make the game fill the available screen properly.
+* Prevent page scrolling while playing.
+* Make touch controls extremely responsive.
+* Make buttons large enough to tap comfortably.
+* Keep the game playable in both portrait and landscape where practical.
+* Make sure browser resizing does not break the game.
+
+7. AUDIO
+    Add subtle original game sounds if practical:
+
+* Jump
+* Landing
+* Collision
+* Button interaction
+
+Keep the sounds short and unobtrusive.
+
+Do not require external copyrighted audio assets. Use simple generated Web Audio sounds or original lightweight effects.
+
+8. PERFORMANCE
+    Keep the game lightweight and smooth.
+
+* Use requestAnimationFrame or the existing efficient game loop.
+* Avoid unnecessary dependencies.
+* Clean up old obstacles/effects that are no longer needed.
+* Avoid memory leaks.
+* Target smooth gameplay on mobile.
+* Do not introduce a backend, database, authentication, or unnecessary server functionality.
+
+9. RESPONSIVE CANVAS
+    Make sure the game scales correctly across:
+
+* iPhone
+* Android phones
+* Tablets
+* Desktop browsers
+
+The game should maintain correct collision coordinates and proportions after resizing.
+
+10. FINAL QUALITY CHECK
+    After implementing everything:
+
+* Run the game.
+* Test starting the game.
+* Test jumping.
+* Test obstacle collision.
+* Test Game Over.
+* Test Retry.
+* Test high-score persistence.
+* Test mobile touch controls.
+* Test Space/click controls.
+* Check the browser console for errors.
+* Fix any errors you find.
+
+IMPORTANT:
+Do not replace the current game with a completely different game.
+Preserve the existing Fork Runner identity and sunset/purple desert aesthetic.
+Do not use Chrome Dinosaur branding, sprites, assets, or copied UI.
+Make the result feel like a polished indie web game rather than a simple coding demo.
+
+Most importantly: actually implement and test these changes in the existing Replit project. Do not just explain what should be changed.

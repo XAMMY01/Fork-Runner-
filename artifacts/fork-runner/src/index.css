@@ -230,8 +230,9 @@ button {
 .start-button,
 .retry-button {
   position: relative;
-  min-width: 206px;
-  padding: 16px 27px 15px;
+  min-width: 218px;
+  min-height: 54px;
+  padding: 16px 34px 15px 27px;
   border: 0;
   border-radius: 999px;
   background: var(--cream);
@@ -270,6 +271,12 @@ button {
 .start-button:active,
 .retry-button:active {
   transform: translateY(1px);
+}
+
+.start-button:focus-visible,
+.retry-button:focus-visible {
+  outline: 3px solid var(--mint);
+  outline-offset: 4px;
 }
 
 .key-hint {
@@ -475,7 +482,15 @@ button {
   }
 
   .best-block {
-    display: none;
+    display: flex;
+  }
+
+  .best-block .score-label {
+    font-size: 8px;
+  }
+
+  .best-block .score-value {
+    font-size: 14px;
   }
 
   .center-prompt {
@@ -490,6 +505,17 @@ button {
     max-width: 275px;
     margin-top: 20px;
     font-size: 13px;
+  }
+
+  .start-button,
+  .retry-button {
+    min-width: 230px;
+    min-height: 58px;
+  }
+
+  .game-over-card {
+    padding-right: 22px;
+    padding-left: 22px;
   }
 
   .bottom-hint {
