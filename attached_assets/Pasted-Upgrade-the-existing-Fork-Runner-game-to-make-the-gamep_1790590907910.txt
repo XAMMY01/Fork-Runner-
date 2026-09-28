@@ -1,0 +1,134 @@
+Upgrade the existing Fork Runner game to make the gameplay significantly more challenging and skill-based.
+
+IMPORTANT:
+Do not rebuild the game from scratch. Preserve the existing visuals, controls, start screen, Game Over screen, high score system, mobile support, and overall sunset/purple desert identity.
+
+The goal of this update is specifically to make the game HARDER and more challenging while keeping it fair and addictive.
+
+DIFFICULTY PROGRESSION:
+
+1. FASTER OBSTACLES
+
+* Increase the starting obstacle speed slightly.
+* Gradually increase obstacle speed based on score/time survived.
+* Make the speed increase noticeable but smooth rather than suddenly jumping.
+* Set a sensible maximum speed so the game remains physically possible.
+
+2. SMARTER OBSTACLE SPAWNING
+
+* Reduce the average distance between forks as the player survives longer.
+* Start with comfortable spacing for beginners.
+* Gradually introduce shorter gaps.
+* Randomize obstacle spacing within controlled limits.
+* NEVER create an unavoidable obstacle sequence.
+
+3. MULTIPLE FORK PATTERNS
+    Introduce different obstacle patterns as difficulty increases:
+
+EARLY GAME:
+
+* Single fork
+* Large gap between forks
+
+MID GAME:
+
+* Two forks with shorter spacing
+* Alternating obstacle distances
+* Occasional rapid consecutive forks
+
+LATE GAME:
+
+* Very closely spaced forks requiring precise timing
+* Different fork sizes
+* Mixed obstacle patterns
+
+Make sure every pattern has a legitimate way for the player to survive.
+
+4. JUMP TIMING
+    Make the game require actual timing rather than allowing the player to simply hold/tap repeatedly.
+
+* Preserve the current jump mechanics.
+* Prevent infinite/double jumping unless intentionally supported.
+* Make some obstacles require early jumps and others require later jumps.
+* Make landing timing matter.
+* Keep collision detection fair.
+
+5. DIFFICULTY LEVELS
+    Create invisible difficulty stages based on score/time:
+
+LEVEL 1 — START
+Comfortable speed and spacing.
+
+LEVEL 2 — WARMING UP
+Slightly faster obstacles and shorter gaps.
+
+LEVEL 3 — FAST
+Noticeably faster movement and more frequent forks.
+
+LEVEL 4 — EXTREME
+Fast obstacles, tighter spacing and more complex patterns.
+
+LEVEL 5 — INSANE
+Very challenging gameplay intended for high-score players.
+
+Do not display these as complicated menus. Simply transition between them automatically during gameplay.
+
+6. OCCASIONAL SURPRISES
+    Add controlled variations such as:
+
+* A sudden sequence of closely spaced forks.
+* A slightly larger fork.
+* A short period of faster obstacles.
+* Different obstacle spacing patterns.
+
+Do NOT make surprises random in a way that can create impossible situations.
+
+7. SPEED FEEL
+    Make the increasing speed feel satisfying:
+
+* Increase background scrolling speed alongside obstacle speed.
+* Increase subtle environmental movement.
+* Make the world feel progressively faster.
+* Keep animation smooth.
+
+8. SCORE BALANCING
+    Make the score reflect survival difficulty.
+
+As the game becomes faster:
+
+* Increase score accumulation slightly.
+* Make high scores feel progressively harder to achieve.
+* Keep the score consistent and predictable enough that players can understand their progress.
+
+9. FAIRNESS CHECK
+    This is extremely important.
+
+Before finalizing:
+
+* Simulate/test many obstacle sequences.
+* Make sure the player always has enough reaction time.
+* Make sure the jump height and obstacle spacing are compatible.
+* Ensure no obstacle can spawn directly on top of the player.
+* Ensure combinations of obstacles cannot create unavoidable collisions.
+* Avoid difficulty spikes that feel like bugs.
+
+10. GAME FEEL
+    The game should create this progression:
+
+“Easy…”
+→ “Okay, this is getting faster.”
+→ “I need to concentrate.”
+→ “This is REALLY fast.”
+→ “HOW DID I EVEN GET THAT FAR?!”
+
+The player should feel that losing was caused by their timing/skill rather than unfair game design.
+
+11. PERFORMANCE
+    Maintain smooth performance on iPhone and desktop.
+    Do not introduce unnecessary libraries or backend functionality.
+    Keep the game lightweight.
+    Check the browser console for errors.
+
+After implementing the changes, actually run and test the game yourself.
+
+Do not simply explain the changes. Implement them directly in the existing Fork Runner project.

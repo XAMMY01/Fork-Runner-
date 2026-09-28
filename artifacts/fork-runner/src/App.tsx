@@ -44,8 +44,33 @@ type GameData = {
   impactY: number;
 };
 
+type DifficultyProfile = {
+  level: number;
+  speed: number;
+  minSpawnGap: number;
+  maxSpawnGap: number;
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+
+const getDifficulty = (score: number): DifficultyProfile => {
+  const level = score < 60 ? 1 : score < 140 ? 2 : score < 240 ? 3 : score < 380 ? 4 : 5;
+  const speed = 320 + Math.min(350, score * 1.65);
+  const spawnGaps = [
+    [1.34, 2.18],
+    [1.16, 1.92],
+    [1.02, 1.7],
+    [0.9, 1.5],
+    [0.82, 1.34],
+  ][level - 1];
+  return {
+    level,
+    speed,
+    minSpawnGap: spawnGaps[0],
+    maxSpawnGap: spawnGaps[1],
+  };
+};
 
 const makeGame = (best = 0): GameData => ({
   width: 0,
@@ -263,6 +288,7 @@ const drawRunner = (context: CanvasRenderingContext2D, game: GameData) => {
 const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   const { width, height, groundY } = game;
   if (!width || !height) return;
+  const difficulty = getDifficulty(game.score);
 
   context.clearRect(0, 0, width, height);
 
@@ -298,7 +324,7 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   }
   context.globalAlpha = 1;
 
-  const cloudShift = (game.elapsed * 12) % (width + 220);
+  const cloudShift = (game.elapsed * (10 + difficulty.speed * 0.025)) % (width + 220);
   drawCloud(context, width * 0.13 - cloudShift, height * 0.2, 0.8);
   drawCloud(context, width * 0.66 - (cloudShift * 0.65), height * 0.14, 0.55);
   drawCloud(context, width + 110 - (cloudShift * 0.36), height * 0.33, 0.68);
@@ -333,7 +359,7 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   context.closePath();
   context.fill();
 
-  const detailShift = (game.elapsed * 42) % 180;
+  const detailShift = (game.elapsed * (34 + difficulty.speed * 0.07)) % 180;
   for (let index = -1; index < width / 180 + 2; index += 1) {
     drawCactus(context, index * 180 - detailShift + 52, groundY - 4, index % 2 === 0 ? 0.8 : 0.55);
   }
@@ -343,13 +369,13 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   context.fillStyle = 'rgba(245, 188, 98, .22)';
   context.fillRect(0, groundY, width, 2);
   context.fillStyle = 'rgba(166, 211, 191, .2)';
-  const dashShift = (game.elapsed * (260 + game.score * 1.6)) % 98;
+  const dashShift = (game.elapsed * (difficulty.speed * 0.88)) % 98;
   for (let index = -1; index < width / 98 + 2; index += 1) {
     context.fillRect(index * 98 - dashShift, groundY + 29, 43, 2);
   }
   context.fillStyle = 'rgba(245, 188, 98, .12)';
   for (let index = 0; index < width / 58 + 2; index += 1) {
-    context.fillRect(index * 58 - ((game.elapsed * 75) % 58), groundY + 52, 21, 1);
+    context.fillRect(index * 58 - ((game.elapsed * (52 + difficulty.speed * 0.04)) % 58), groundY + 52, 21, 1);
   }
 
   for (const particle of game.dust) {
@@ -420,36 +446,76 @@ const isColliding = (game: GameData, obstacle: Obstacle) => {
 const stepGame = (game: GameData, delta: number): GameEvent => {
   const dt = Math.min(delta, 0.034);
   game.elapsed += dt;
-  game.score = Math.floor(game.elapsed * 10);
-  const speed = 300 + Math.min(290, game.score * 1.7);
+  const scoreRate = 10 + Math.min(2.2, game.elapsed / 52);
+  game.score = Math.floor(game.elapsed * scoreRate);
+  const difficulty = getDifficulty(game.score);
+  const speed = difficulty.speed;
   game.landingPulse = Math.max(0, game.landingPulse - dt * 3.8);
   game.impactPulse = Math.max(0, game.impactPulse - dt * 2.8);
 
   game.spawnClock += dt;
   if (game.spawnClock >= game.nextSpawn) {
-    const forkWidth = clamp(game.width * 0.045, 33, 50);
-    const obstacleHeight = clamp(55 + Math.random() * 23 + game.score * 0.025, 54, 88);
+    const largeFork =
+      difficulty.level >= 3 &&
+      Math.random() < 0.06 + (difficulty.level - 3) * 0.035;
+    const forkWidth = clamp(game.width * 0.045, 33, 50) + (largeFork ? 5 : 0);
+    const obstacleHeight = clamp(
+      55 + Math.random() * 23 + game.score * 0.025 + (largeFork ? 8 : 0),
+      54,
+      largeFork ? 96 : 88,
+    );
     const firstX = game.width + 42;
-    game.obstacles.push({
-      x: firstX,
-      width: forkWidth,
-      height: obstacleHeight,
-      lean: (Math.random() - 0.5) * 0.08,
-    });
+    const patternRoll = Math.random();
+    let offsets = [0];
 
-    // Once the player has a little room to learn, occasionally use a
-    // readable two-fork rhythm. The gap is always inside one jump arc.
-    const canUsePattern = game.score > 75 && Math.random() < 0.2;
-    if (canUsePattern) {
+    if (difficulty.level === 2 && patternRoll < 0.32) {
+      offsets = [0, 166 + Math.random() * 28];
+    } else if (difficulty.level === 3) {
+      if (patternRoll < 0.34) offsets = [0, 125 + Math.random() * 30];
+      else if (patternRoll < 0.52) {
+        offsets = [0, 105 + Math.random() * 20, 230 + Math.random() * 30];
+      }
+    } else if (difficulty.level === 4) {
+      if (patternRoll < 0.3) {
+        offsets = [0, 95 + Math.random() * 25, 190 + Math.random() * 30];
+      } else if (patternRoll < 0.58) {
+        offsets = [0, 124 + Math.random() * 26];
+      } else if (patternRoll < 0.72) {
+        offsets = [0, 92 + Math.random() * 14, 184 + Math.random() * 18, 276 + Math.random() * 20];
+      }
+    } else if (difficulty.level === 5) {
+      if (patternRoll < 0.34) {
+        offsets = [0, 80 + Math.random() * 18, 162 + Math.random() * 26];
+      } else if (patternRoll < 0.58) {
+        offsets = [0, 104 + Math.random() * 20, 215 + Math.random() * 24, 328 + Math.random() * 24];
+      } else if (patternRoll < 0.78) {
+        offsets = [0, 120 + Math.random() * 24];
+      }
+    }
+
+    offsets.forEach((offset, index) => {
       game.obstacles.push({
-        x: firstX + 132 + Math.random() * 34,
+        x: firstX + offset,
         width: forkWidth,
-        height: clamp(obstacleHeight - 8 + Math.random() * 8, 50, 82),
+        height: clamp(
+          obstacleHeight - (index % 2 === 1 ? 7 : 0) + Math.random() * 5,
+          50,
+          96,
+        ),
         lean: (Math.random() - 0.5) * 0.08,
       });
-    }
+    });
+
     game.spawnClock = 0;
-    game.nextSpawn = clamp(1.3 + Math.random() * 0.88 - game.score * 0.0015, 1.03, 2.15);
+    const patternEnd = offsets[offsets.length - 1] + forkWidth;
+    const landingBuffer = difficulty.level < 3 ? 0.9 : 0.78;
+    const clearTime = patternEnd / speed + landingBuffer;
+    const randomGap =
+      difficulty.minSpawnGap +
+      Math.random() * (difficulty.maxSpawnGap - difficulty.minSpawnGap);
+    // Keep a landing window after every pattern so a close sequence is
+    // demanding but never requires a double-jump or an impossible landing.
+    game.nextSpawn = Math.max(randomGap, clearTime);
   }
 
   game.velocityY += 2250 * dt;
