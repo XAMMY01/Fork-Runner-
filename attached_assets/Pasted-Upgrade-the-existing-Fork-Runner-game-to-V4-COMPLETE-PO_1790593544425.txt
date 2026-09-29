@@ -1,0 +1,492 @@
+Upgrade the existing Fork Runner game to V4: COMPLETE POWER-UP & COLLECTIBLE SYSTEM.
+
+IMPORTANT:
+V3 gameplay balancing has already been completed and is working correctly. DO NOT undo or weaken the V3 improvements.
+
+Preserve:
+
+* Current gradual difficulty progression
+* Current reduced acceleration
+* Current sensible maximum speed
+* Current fair double/triple-fork patterns
+* Current jump mechanics
+* Current obstacle-generation logic
+* Current character
+* Current sunset/purple visual identity
+* Current start screen
+* Current Game Over screen
+* Current Retry system
+* Current high-score system
+* Current desktop and mobile controls
+
+Do NOT rebuild the game from scratch. Inspect the existing project and integrate these features into the current architecture.
+
+The goal of V4 is to introduce a complete collectible and power-up system that adds strategy and replayability without making the game unfair or overly complicated.
+
+==================================================
+
+1. COINS
+    ==================================================
+
+Add collectible coins throughout gameplay.
+
+* Coins should spawn naturally during runs.
+* Place coins at different heights and positions.
+* Some coins should require jumping.
+* Some should be placed along safer routes.
+* Some can create risk/reward decisions.
+* Never place coins inside unavoidable fork collisions.
+* Never force the player to collect a coin.
+* Survival must always be more important than collecting a coin.
+
+COIN VISUALS:
+
+* Create an original coin design matching the existing Fork Runner aesthetic.
+* Add a subtle spinning/shimmering animation.
+* Make coins immediately recognizable.
+* Add a satisfying collection effect.
+* Add a short original collection sound.
+
+COIN COUNT:
+Display the current run’s collected coins in the HUD.
+
+Also maintain a persistent total coin balance using localStorage.
+
+Example:
+
+🪙 125
+
+The persistent balance must survive:
+
+* Game Over
+* Retry
+* Page refresh
+* Closing and reopening the browser
+
+If saved data is missing or corrupted:
+
+* Coins = 0
+* High score = 0
+
+Never allow negative or invalid coin values.
+
+==================================================
+2. POWER-UP SYSTEM
+
+Create a proper reusable power-up architecture so additional power-ups can be added later without rewriting the game.
+
+There should be FOUR power-ups:
+
+A. 🧲 COIN MAGNET
+B. 🛡️ SHIELD
+C. ⏱️ SLOW MOTION
+D. ⚡ INVINCIBILITY
+
+Each power-up must have:
+
+* Unique visual design
+* Unique activation effect
+* Unique sound
+* Clear gameplay effect
+* Controlled spawn frequency
+* Optional configurable duration
+* HUD indicator while active
+
+Power-ups should be significantly rarer than coins.
+
+Do NOT allow power-ups to spawn constantly.
+
+==================================================
+3. 🧲 COIN MAGNET
+
+When collected:
+
+* Automatically attract nearby coins toward the player.
+* Coins should visibly move toward the player.
+* The attraction should feel smooth rather than instant.
+* The magnet should have a limited duration.
+* Suggested duration: approximately 6–8 seconds.
+* Make the duration configurable in the code.
+
+Add:
+
+* Magnetic visual effect around the player.
+* Small particle/energy effect.
+* HUD indicator showing the magnet is active.
+* Countdown or progress indicator.
+
+The magnet should only affect coins.
+
+It must NOT attract power-ups or obstacles.
+
+==================================================
+4. 🛡️ SHIELD
+
+When collected:
+
+* Activate a protective shield around the player.
+* The shield protects against ONE fork collision.
+* When the player hits a fork:
+    * Do NOT trigger Game Over.
+    * Destroy/deactivate the shield.
+    * Allow the player to continue running.
+    * Play a satisfying impact effect.
+    * Play a shield-break sound.
+    * Give the player brief visual feedback.
+
+The shield should then disappear.
+
+IMPORTANT:
+The shield is a ONE-HIT protection system.
+
+Do not allow the shield to make the player permanently immune.
+
+Show a small shield indicator in the HUD while active.
+
+==================================================
+5. ⏱️ SLOW MOTION
+
+When collected:
+
+* Temporarily slow down the obstacles and gameplay.
+* Give the player additional reaction time.
+* Suggested duration: approximately 4–5 seconds.
+* Make the duration configurable.
+* Slow the obstacle movement smoothly rather than instantly.
+* Restore normal speed smoothly when the effect ends.
+
+IMPORTANT:
+Slow Motion should modify the effective gameplay speed without destroying the V3 difficulty progression.
+
+Do not permanently reduce the game’s difficulty.
+
+Add:
+
+* Distinct visual effect.
+* Subtle time-warp/particle effect.
+* HUD indicator.
+* Countdown/progress indicator.
+* Activation and expiration sound.
+
+==================================================
+6. ⚡ INVINCIBILITY
+
+Add a rare temporary invincibility power-up.
+
+Suggested duration:
+approximately 5 seconds.
+
+Make the duration configurable.
+
+While active:
+
+* The player cannot be killed by fork collisions.
+* Forks can touch/pass through the player without causing Game Over.
+* The player remains fully controllable.
+* Normal movement and jumping continue.
+
+Visual effects:
+
+* Strong but tasteful glow/aura.
+* Particles or energy trail.
+* Distinct character effect.
+* Clear HUD indicator.
+
+Display a countdown:
+
+INVINCIBLE 5
+INVINCIBLE 4
+INVINCIBLE 3
+INVINCIBLE 2
+INVINCIBLE 1
+
+During approximately the final second:
+
+* Make the visual effect subtly flash.
+* Clearly communicate that invincibility is about to expire.
+
+When it reaches zero:
+
+* Remove the effect.
+* Restore normal collision behavior.
+* Remove the HUD countdown.
+
+Do not allow invincibility to stack indefinitely.
+
+==================================================
+7. POWER-UP SPAWNING & FAIRNESS
+
+Power-up generation is extremely important.
+
+Power-ups should be:
+
+* Rare
+* Valuable
+* Strategically placed
+* Collectible without creating unfair deaths
+
+Never:
+
+* Spawn a power-up directly inside a fork.
+* Spawn a power-up where collecting it requires an impossible jump.
+* Create a situation where the player must collect a power-up to survive.
+* Spawn multiple powerful power-ups constantly.
+* Create an unavoidable obstacle sequence around a power-up.
+
+Power-up spawning should respect the existing V3 obstacle-generation and fairness system.
+
+The player should always be able to ignore a power-up and safely continue the run.
+
+==================================================
+8. POWER-UP BALANCING
+
+Use reasonable rarity and balancing.
+
+Suggested hierarchy:
+
+COMMON:
+🪙 Coins
+
+UNCOMMON:
+🧲 Coin Magnet
+🛡️ Shield
+
+RARE:
+⏱️ Slow Motion
+
+VERY RARE:
+⚡ Invincibility
+
+Do not make these exact probabilities mandatory. Tune them based on actual gameplay testing.
+
+The goal is:
+
+“Wow, I got a power-up!”
+
+rather than:
+
+“There is another power-up every five seconds.”
+
+==================================================
+9. POWER-UP STACKING
+
+Prevent power-ups from creating broken gameplay.
+
+Decide intelligently how simultaneous effects should behave.
+
+Examples:
+
+* Magnet + Shield can coexist.
+* Magnet + Invincibility can coexist.
+* Shield + Invincibility can coexist.
+* Slow Motion + Invincibility can coexist.
+
+If the same power-up is collected while it is already active:
+
+* Do NOT create unlimited stacking.
+* Either refresh the duration or ignore the duplicate.
+* Choose whichever produces the better gameplay experience.
+
+Make the behavior consistent.
+
+==================================================
+10. HUD
+
+Improve the existing HUD without cluttering it.
+
+Display:
+
+* Current score
+* High score
+* Current run coins
+* Persistent coin balance where appropriate
+* Active power-up indicators
+
+Active power-ups should have:
+
+* Small icon
+* Name or recognizable symbol
+* Remaining duration/progress
+
+Keep the HUD readable on iPhone.
+
+Do not allow HUD elements to cover the gameplay area.
+
+==================================================
+11. GAME OVER & RETRY
+
+Integrate the new system with the existing Game Over flow.
+
+When the player dies:
+
+* Stop gameplay.
+* Stop active power-up timers.
+* Stop power-up visual effects.
+* Finalize the run’s collected coins.
+* Update persistent coin balance.
+* Preserve high score.
+* Show the existing polished Game Over screen.
+* Show final score.
+* Show coins collected during that run.
+
+When RETRY is pressed:
+
+* Start a completely fresh run.
+* Reset temporary power-ups.
+* Reset run-specific coin count.
+* Preserve persistent coin balance.
+* Preserve high score.
+
+==================================================
+12. SAVE DATA
+
+Use localStorage safely.
+
+Persist at minimum:
+
+* High score
+* Total coins
+
+Do not store temporary active power-up states between games.
+
+If localStorage is unavailable or corrupted:
+
+* Fall back safely.
+* Do not crash the game.
+
+==================================================
+13. VISUAL & AUDIO POLISH
+
+Keep the existing Fork Runner sunset/purple aesthetic.
+
+Make every power-up visually distinct.
+
+Suggested visual language:
+
+🧲 Magnet
+Magnetic/attraction effect.
+
+🛡️ Shield
+Protective circular barrier.
+
+⏱️ Slow Motion
+Time distortion/slow-motion effect.
+
+⚡ Invincibility
+Strong energy/glow effect.
+
+Use original visuals only.
+
+Do not copy Chrome Dinosaur assets, branding, sprites, sounds, or UI.
+
+If the current project already has audio, integrate these effects with the existing audio style.
+
+Use lightweight original/generated audio where practical.
+
+==================================================
+14. PERFORMANCE
+
+Keep the game lightweight.
+
+* Maintain smooth gameplay on iPhone and desktop.
+* Use the existing efficient game loop.
+* Clean up expired coins.
+* Clean up collected power-ups.
+* Clean up particles/effects.
+* Prevent memory leaks.
+* Avoid unnecessary dependencies.
+* Do not introduce a backend or database.
+
+==================================================
+15. IMPORTANT DIFFICULTY RULE
+
+DO NOT CHANGE THE V3 DIFFICULTY BALANCE.
+
+The current game was specifically adjusted to:
+
+* Start at a comfortable speed.
+* Accelerate gradually.
+* Avoid excessive early speed.
+* Use strategic double/triple fork sequences.
+* Avoid impossible fork traps.
+* Give the player reasonable reaction time.
+
+Keep all of this intact.
+
+Power-ups should ADD strategic options, not compensate for unfair obstacle generation.
+
+==================================================
+16. FULL TESTING
+
+After implementing V4, actually play/test the game.
+
+Test:
+
+COINS:
+
+* Spawn
+* Collection
+* HUD update
+* Persistent balance
+* Page refresh
+* Game Over
+* Retry
+
+MAGNET:
+
+* Pickup
+* Coin attraction
+* Duration
+* Expiration
+* HUD
+* Visual effect
+
+SHIELD:
+
+* Pickup
+* One collision protection
+* Shield break
+* Game continues
+* Shield expiration/behavior
+
+SLOW MOTION:
+
+* Pickup
+* Gameplay slowdown
+* Duration
+* Smooth restoration
+* HUD
+* No permanent difficulty change
+
+INVINCIBILITY:
+
+* Pickup
+* Fork collision immunity
+* Countdown
+* Visual effect
+* Expiration
+* Normal collision restored
+
+GENERAL:
+
+* Start screen
+* Jumping
+* Obstacle generation
+* Double/triple forks
+* Game Over
+* Retry
+* High score
+* Mobile touch
+* Desktop keyboard
+* Browser refresh
+* Browser console errors
+
+Test multiple runs rather than testing only one example.
+
+IMPORTANT FINAL REQUIREMENT:
+
+Do not simply describe how these features should work.
+
+IMPLEMENT THEM DIRECTLY in the existing Fork Runner Replit project, run the game, test the complete gameplay loop, and fix any bugs you discover.
+
+The final result should feel like the same Fork Runner game, but with a polished collectible and power-up system that adds strategy, replayability, and excitement without compromising the fair V3 difficulty.

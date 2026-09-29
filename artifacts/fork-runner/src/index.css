@@ -167,6 +167,137 @@ button {
   letter-spacing: -.05em;
 }
 
+.coin-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: clamp(15px, 2vw, 19px);
+  font-weight: 700;
+  letter-spacing: -.06em;
+  line-height: .95;
+}
+
+.coin-value small {
+  color: rgba(255, 241, 213, .58);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: -.04em;
+}
+
+.coin-glyph {
+  color: var(--peach);
+  font-size: .78em;
+  text-shadow: 0 0 12px rgba(245, 188, 98, .6);
+}
+
+.powerup-hud {
+  position: absolute;
+  z-index: 4;
+  top: clamp(76px, 10vh, 104px);
+  right: clamp(20px, 5vw, 72px);
+  display: flex;
+  max-width: min(270px, calc(100% - 40px));
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.powerup-chip {
+  display: grid;
+  min-width: 160px;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  column-gap: 8px;
+  padding: 7px 10px 8px 7px;
+  border: 1px solid rgba(255, 241, 213, .22);
+  border-radius: 11px;
+  background: rgba(43, 29, 60, .7);
+  box-shadow: 0 10px 28px rgba(23, 15, 37, .18);
+  color: var(--cream);
+  backdrop-filter: blur(12px);
+  animation: powerup-arrive .24s ease-out both;
+}
+
+.powerup-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.magnet-chip {
+  color: #9be5cc;
+}
+
+.shield-chip {
+  color: #90c8ff;
+}
+
+.slow-chip {
+  color: #c7a6ee;
+}
+
+.invincible-chip {
+  color: #ffd579;
+}
+
+.powerup-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--cream);
+  font-family: var(--font-mono);
+  text-align: left;
+}
+
+.powerup-copy strong {
+  overflow: hidden;
+  color: currentColor;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.powerup-copy small {
+  color: rgba(255, 241, 213, .6);
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.powerup-progress {
+  grid-column: 1 / -1;
+  display: block;
+  height: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 241, 213, .13);
+}
+
+.powerup-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width .1s linear;
+}
+
+.powerup-flashing {
+  animation: powerup-flash .2s steps(2, end) infinite;
+}
+
 .center-prompt {
   position: absolute;
   z-index: 4;
@@ -463,6 +594,23 @@ button {
   }
 }
 
+@keyframes powerup-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(10px) scale(.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes powerup-flash {
+  50% {
+    opacity: .45;
+  }
+}
+
 @media (max-width: 560px) {
   .hud {
     padding-top: 20px;
@@ -478,7 +626,7 @@ button {
   }
 
   .score-panel {
-    gap: 17px;
+    gap: 13px;
   }
 
   .best-block {
@@ -491,6 +639,23 @@ button {
 
   .best-block .score-value {
     font-size: 14px;
+  }
+
+  .coin-value {
+    font-size: 14px;
+  }
+
+  .coin-value small {
+    font-size: 8px;
+  }
+
+  .powerup-hud {
+    top: 70px;
+    right: 20px;
+  }
+
+  .powerup-chip {
+    min-width: 145px;
   }
 
   .center-prompt {

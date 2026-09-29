@@ -9,6 +9,23 @@ type Obstacle = {
   lean: number;
 };
 
+type Coin = {
+  x: number;
+  y: number;
+  radius: number;
+  phase: number;
+};
+
+type PowerUpKind = 'magnet' | 'shield' | 'slow' | 'invincible';
+
+type PowerUp = {
+  kind: PowerUpKind;
+  x: number;
+  y: number;
+  size: number;
+  phase: number;
+};
+
 type DustParticle = {
   x: number;
   y: number;
@@ -19,7 +36,32 @@ type DustParticle = {
   size: number;
 };
 
-type GameEvent = 'land' | 'hit' | null;
+type EffectParticle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+};
+
+type ActivePowerUps = {
+  magnet: number;
+  shield: boolean;
+  slow: number;
+  invincible: number;
+};
+
+type GameEvent =
+  | { type: 'land' }
+  | { type: 'hit' }
+  | { type: 'coin' }
+  | { type: 'powerup'; kind: PowerUpKind }
+  | { type: 'shieldBreak' }
+  | { type: 'expire'; kind: 'slow' | 'invincible' }
+  | null;
 
 type GameData = {
   width: number;
@@ -34,10 +76,23 @@ type GameData = {
   elapsed: number;
   score: number;
   best: number;
+  runCoins: number;
+  totalCoins: number;
   spawnClock: number;
   nextSpawn: number;
+  coinSpawnClock: number;
+  nextCoinSpawn: number;
+  powerUpSpawnClock: number;
+  nextPowerUpSpawn: number;
   obstacles: Obstacle[];
+  coins: Coin[];
+  powerUps: PowerUp[];
   dust: DustParticle[];
+  effects: EffectParticle[];
+  activePowerUps: ActivePowerUps;
+  slowBlend: number;
+  collisionGrace: number;
+  collisionFlash: number;
   landingPulse: number;
   impactPulse: number;
   impactX: number;
@@ -58,6 +113,40 @@ const GRAVITY = 2250;
 const JUMP_VELOCITY = 825;
 const JUMP_FLIGHT_TIME = (JUMP_VELOCITY * 2) / GRAVITY;
 const PATTERN_MARGIN = 0.055;
+const MAGNET_DURATION = 7;
+const SLOW_DURATION = 5;
+const INVINCIBLE_DURATION = 5;
+const BEST_SCORE_KEY = 'fork-runner-best';
+const TOTAL_COINS_KEY = 'fork-runner-coins';
+
+const POWER_UP_META: Record<
+  PowerUpKind,
+  { label: string; symbol: string; color: string; duration: number }
+> = {
+  magnet: { label: 'Magnet', symbol: 'M', color: '#9be5cc', duration: MAGNET_DURATION },
+  shield: { label: 'Shield', symbol: 'S', color: '#90c8ff', duration: 0 },
+  slow: { label: 'Slow motion', symbol: 'T', color: '#c7a6ee', duration: SLOW_DURATION },
+  invincible: { label: 'Invincible', symbol: '✦', color: '#ffd579', duration: INVINCIBLE_DURATION },
+};
+
+const readStoredNumber = (key: string) => {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const value = Number(window.localStorage.getItem(key) ?? 0);
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const writeStoredNumber = (key: string, value: number) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, String(Math.max(0, Math.floor(value))));
+  } catch {
+    // Gameplay continues if storage is unavailable.
+  }
+};
 
 const getSafeAirborneWindow = (obstacleHeight: number) => {
   // Collision uses the player's feet, so this is the amount of vertical
@@ -113,7 +202,7 @@ const getDifficulty = (score: number): DifficultyProfile => {
   };
 };
 
-const makeGame = (best = 0): GameData => ({
+const makeGame = (best = 0, totalCoins = 0): GameData => ({
   width: 0,
   height: 0,
   groundY: 0,
@@ -126,10 +215,28 @@ const makeGame = (best = 0): GameData => ({
   elapsed: 0,
   score: 0,
   best,
+  runCoins: 0,
+  totalCoins,
   spawnClock: 0,
   nextSpawn: 1.48,
+  coinSpawnClock: 0,
+  nextCoinSpawn: 0.95,
+  powerUpSpawnClock: 0,
+  nextPowerUpSpawn: 9.5,
   obstacles: [],
+  coins: [],
+  powerUps: [],
   dust: [],
+  effects: [],
+  activePowerUps: {
+    magnet: 0,
+    shield: false,
+    slow: 0,
+    invincible: 0,
+  },
+  slowBlend: 1,
+  collisionGrace: 0,
+  collisionFlash: 0,
   landingPulse: 0,
   impactPulse: 0,
   impactX: 0,
@@ -257,6 +364,73 @@ const drawCactus = (
   context.restore();
 };
 
+const drawCoin = (
+  context: CanvasRenderingContext2D,
+  coin: Coin,
+  elapsed: number,
+) => {
+  const shimmer = Math.abs(Math.cos(elapsed * 7 + coin.phase));
+  const radius = coin.radius;
+  context.save();
+  context.translate(coin.x, coin.y);
+  context.rotate(Math.sin(elapsed * 3.5 + coin.phase) * 0.12);
+  context.globalAlpha = 0.18;
+  context.fillStyle = '#f5bc62';
+  context.beginPath();
+  context.arc(0, 0, radius + 7 + shimmer * 3, 0, Math.PI * 2);
+  context.fill();
+  context.globalAlpha = 1;
+  context.scale(0.68 + shimmer * 0.32, 1);
+  context.fillStyle = '#f5bc62';
+  context.beginPath();
+  context.arc(0, 0, radius, 0, Math.PI * 2);
+  context.fill();
+  context.lineWidth = 2;
+  context.strokeStyle = '#fff1d5';
+  context.stroke();
+  context.fillStyle = '#d95f58';
+  context.beginPath();
+  context.moveTo(0, -radius * 0.55);
+  context.lineTo(radius * 0.28, 0);
+  context.lineTo(0, radius * 0.55);
+  context.lineTo(-radius * 0.28, 0);
+  context.closePath();
+  context.fill();
+  context.restore();
+};
+
+const drawPowerUp = (
+  context: CanvasRenderingContext2D,
+  powerUp: PowerUp,
+  elapsed: number,
+) => {
+  const meta = POWER_UP_META[powerUp.kind];
+  const pulse = 0.88 + Math.sin(elapsed * 5 + powerUp.phase) * 0.12;
+  const size = powerUp.size * pulse;
+  context.save();
+  context.translate(powerUp.x, powerUp.y);
+  context.rotate(Math.sin(elapsed * 2.5 + powerUp.phase) * 0.08);
+  context.globalAlpha = 0.18;
+  context.fillStyle = meta.color;
+  context.beginPath();
+  context.arc(0, 0, size + 9, 0, Math.PI * 2);
+  context.fill();
+  context.globalAlpha = 1;
+  context.fillStyle = '#2b1d3c';
+  context.strokeStyle = meta.color;
+  context.lineWidth = 2.5;
+  context.beginPath();
+  context.arc(0, 0, size, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+  context.fillStyle = meta.color;
+  context.font = `700 ${Math.max(11, size * 0.78)}px ${'Space Mono'}`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(meta.symbol, 0, 1);
+  context.restore();
+};
+
 const drawRunner = (context: CanvasRenderingContext2D, game: GameData) => {
   const { playerX: x, playerY: y, playerW: width, playerH: height } = game;
   const runCycle = Math.sin(game.elapsed * 18);
@@ -265,6 +439,51 @@ const drawRunner = (context: CanvasRenderingContext2D, game: GameData) => {
 
   context.save();
   context.translate(x, y);
+
+  const effectCenterX = width * 0.5;
+  const effectCenterY = height * 0.48;
+  if (game.activePowerUps.magnet > 0) {
+    context.globalAlpha = 0.28 + Math.sin(game.elapsed * 9) * 0.06;
+    context.strokeStyle = '#9be5cc';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(effectCenterX, effectCenterY, width * 0.74, game.elapsed * 2, game.elapsed * 2 + Math.PI * 1.45);
+    context.stroke();
+    context.beginPath();
+    context.arc(effectCenterX, effectCenterY, width * 0.9, -game.elapsed * 1.7, -game.elapsed * 1.7 + Math.PI * 1.15);
+    context.stroke();
+  }
+  if (game.activePowerUps.shield) {
+    context.globalAlpha = 0.3 + Math.sin(game.elapsed * 7) * 0.05;
+    context.strokeStyle = '#90c8ff';
+    context.lineWidth = 2.5;
+    context.beginPath();
+    context.arc(effectCenterX, effectCenterY, width * 0.88, 0, Math.PI * 2);
+    context.stroke();
+  }
+  if (game.activePowerUps.slow > 0) {
+    context.globalAlpha = 0.22;
+    context.strokeStyle = '#c7a6ee';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(effectCenterX, effectCenterY, width * (0.8 + Math.sin(game.elapsed * 4) * 0.08), 0, Math.PI * 2);
+    context.stroke();
+  }
+  if (game.activePowerUps.invincible > 0) {
+    const flashing = game.activePowerUps.invincible < 1 && Math.sin(game.elapsed * 20) > 0;
+    context.globalAlpha = flashing ? 0.16 : 0.42;
+    context.fillStyle = '#ffd579';
+    context.beginPath();
+    context.arc(effectCenterX, effectCenterY, width * 0.86, 0, Math.PI * 2);
+    context.fill();
+    context.globalAlpha = flashing ? 0.35 : 0.7;
+    context.strokeStyle = '#fff1d5';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(effectCenterX, effectCenterY, width * 1.03, game.elapsed * 4, game.elapsed * 4 + Math.PI * 1.6);
+    context.stroke();
+  }
+  context.globalAlpha = 1;
 
   context.globalAlpha = 0.24;
   context.fillStyle = '#191329';
@@ -330,6 +549,7 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   const { width, height, groundY } = game;
   if (!width || !height) return;
   const difficulty = getDifficulty(game.score);
+  const visualSpeed = difficulty.speed * game.slowBlend;
 
   context.clearRect(0, 0, width, height);
 
@@ -365,7 +585,7 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   }
   context.globalAlpha = 1;
 
-  const cloudShift = (game.elapsed * (10 + difficulty.speed * 0.025)) % (width + 220);
+  const cloudShift = (game.elapsed * (10 + visualSpeed * 0.025)) % (width + 220);
   drawCloud(context, width * 0.13 - cloudShift, height * 0.2, 0.8);
   drawCloud(context, width * 0.66 - (cloudShift * 0.65), height * 0.14, 0.55);
   drawCloud(context, width + 110 - (cloudShift * 0.36), height * 0.33, 0.68);
@@ -400,7 +620,7 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   context.closePath();
   context.fill();
 
-  const detailShift = (game.elapsed * (34 + difficulty.speed * 0.07)) % 180;
+  const detailShift = (game.elapsed * (34 + visualSpeed * 0.07)) % 180;
   for (let index = -1; index < width / 180 + 2; index += 1) {
     drawCactus(context, index * 180 - detailShift + 52, groundY - 4, index % 2 === 0 ? 0.8 : 0.55);
   }
@@ -410,13 +630,13 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   context.fillStyle = 'rgba(245, 188, 98, .22)';
   context.fillRect(0, groundY, width, 2);
   context.fillStyle = 'rgba(166, 211, 191, .2)';
-  const dashShift = (game.elapsed * (difficulty.speed * 0.88)) % 98;
+  const dashShift = (game.elapsed * (visualSpeed * 0.88)) % 98;
   for (let index = -1; index < width / 98 + 2; index += 1) {
     context.fillRect(index * 98 - dashShift, groundY + 29, 43, 2);
   }
   context.fillStyle = 'rgba(245, 188, 98, .12)';
   for (let index = 0; index < width / 58 + 2; index += 1) {
-    context.fillRect(index * 58 - ((game.elapsed * (52 + difficulty.speed * 0.04)) % 58), groundY + 52, 21, 1);
+    context.fillRect(index * 58 - ((game.elapsed * (52 + visualSpeed * 0.04)) % 58), groundY + 52, 21, 1);
   }
 
   for (const particle of game.dust) {
@@ -427,6 +647,9 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
     context.fill();
   }
   context.globalAlpha = 1;
+
+  for (const coin of game.coins) drawCoin(context, coin, game.elapsed);
+  for (const powerUp of game.powerUps) drawPowerUp(context, powerUp, game.elapsed);
 
   if (game.landingPulse > 0) {
     const radius = 16 + (1 - game.landingPulse) * 27;
@@ -451,6 +674,14 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   }
 
   for (const obstacle of game.obstacles) drawFork(context, obstacle, groundY);
+  for (const particle of game.effects) {
+    context.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1) * 0.8;
+    context.fillStyle = particle.color;
+    context.beginPath();
+    context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.globalAlpha = 1;
   drawRunner(context, game);
 };
 
@@ -466,6 +697,104 @@ const spawnDust = (game: GameData, count: number) => {
       size: 1.5 + Math.random() * 2.8,
     });
   }
+};
+
+const spawnEffectParticles = (
+  game: GameData,
+  color: string,
+  count: number,
+  originX = game.playerX + game.playerW * 0.5,
+  originY = game.playerY + game.playerH * 0.45,
+) => {
+  for (let index = 0; index < count; index += 1) {
+    game.effects.push({
+      x: originX + (Math.random() - 0.5) * game.playerW,
+      y: originY + (Math.random() - 0.5) * game.playerH,
+      vx: (Math.random() - 0.5) * 150,
+      vy: (Math.random() - 0.5) * 150,
+      life: 0.35 + Math.random() * 0.4,
+      maxLife: 0.75,
+      size: 1.5 + Math.random() * 2.6,
+      color,
+    });
+  }
+};
+
+const getSafeSpawnX = (game: GameData, desiredX: number, padding: number) => {
+  let x = desiredX;
+  for (let pass = 0; pass < game.obstacles.length + 1; pass += 1) {
+    const blockingFork = game.obstacles.find(
+      (obstacle) =>
+        x + padding > obstacle.x - padding &&
+        x - padding < obstacle.x + obstacle.width + padding,
+    );
+    if (!blockingFork) break;
+    x = blockingFork.x + blockingFork.width + padding * 2;
+  }
+  return x;
+};
+
+const spawnCoin = (game: GameData) => {
+  if (game.coins.length >= 40) return;
+  const radius = clamp(game.width * 0.018, 8, 11);
+  const x = getSafeSpawnX(game, game.width + 90 + Math.random() * 100, radius + 16);
+  const nearFork = game.obstacles.some(
+    (obstacle) => x + radius > obstacle.x - 12 && x - radius < obstacle.x + obstacle.width + 12,
+  );
+  const jumpCoin = Math.random() < 0.36;
+  const y = nearFork
+    ? game.groundY - 118
+    : jumpCoin
+      ? game.groundY - (78 + Math.random() * 38)
+      : game.groundY - 27;
+  game.coins.push({
+    x,
+    y,
+    radius,
+    phase: Math.random() * Math.PI * 2,
+  });
+};
+
+const spawnPowerUp = (game: GameData) => {
+  if (game.powerUps.length > 2) return;
+  const roll = Math.random();
+  const kind: PowerUpKind =
+    roll < 0.36
+      ? 'magnet'
+      : roll < 0.7
+        ? 'shield'
+        : roll < 0.91
+          ? 'slow'
+          : 'invincible';
+  const size = clamp(game.width * 0.026, 15, 20);
+  const x = getSafeSpawnX(game, game.width + 120 + Math.random() * 90, size + 20);
+  const nearFork = game.obstacles.some(
+    (obstacle) => x + size > obstacle.x - 16 && x - size < obstacle.x + obstacle.width + 16,
+  );
+  game.powerUps.push({
+    kind,
+    x,
+    y: nearFork
+      ? game.groundY - 124
+      : game.groundY - (Math.random() < 0.32 ? 31 : 76 + Math.random() * 20),
+    size,
+    phase: Math.random() * Math.PI * 2,
+  });
+};
+
+const isPlayerNearPoint = (game: GameData, x: number, y: number, radius: number) => {
+  const playerCenterX = game.playerX + game.playerW * 0.5;
+  const playerCenterY = game.playerY + game.playerH * 0.48;
+  return Math.hypot(playerCenterX - x, playerCenterY - y) < radius + Math.max(game.playerW, game.playerH) * 0.36;
+};
+
+const activatePowerUp = (game: GameData, kind: PowerUpKind): GameEvent => {
+  if (kind === 'magnet') game.activePowerUps.magnet = MAGNET_DURATION;
+  if (kind === 'shield') game.activePowerUps.shield = true;
+  if (kind === 'slow') game.activePowerUps.slow = SLOW_DURATION;
+  if (kind === 'invincible') game.activePowerUps.invincible = INVINCIBLE_DURATION;
+  spawnEffectParticles(game, POWER_UP_META[kind].color, 18);
+  return { type: 'powerup', kind };
 };
 
 const isColliding = (game: GameData, obstacle: Obstacle) => {
@@ -484,15 +813,35 @@ const isColliding = (game: GameData, obstacle: Obstacle) => {
   );
 };
 
-const stepGame = (game: GameData, delta: number): GameEvent => {
+const stepGame = (game: GameData, delta: number): GameEvent[] => {
   const dt = Math.min(delta, 0.034);
   game.elapsed += dt;
   const scoreRate = 9.5 + Math.min(1.6, game.elapsed / 70);
   game.score = Math.floor(game.elapsed * scoreRate);
   const difficulty = getDifficulty(game.score);
   const speed = difficulty.speed;
+  const targetSlowBlend = game.activePowerUps.slow > 0 ? 0.56 : 1;
+  game.slowBlend += (targetSlowBlend - game.slowBlend) * Math.min(1, dt * 6);
+  const effectiveSpeed = speed * game.slowBlend;
+  const events: GameEvent[] = [];
   game.landingPulse = Math.max(0, game.landingPulse - dt * 3.8);
   game.impactPulse = Math.max(0, game.impactPulse - dt * 2.8);
+  game.collisionGrace = Math.max(0, game.collisionGrace - dt);
+  game.collisionFlash = Math.max(0, game.collisionFlash - dt);
+
+  if (game.activePowerUps.magnet > 0) {
+    game.activePowerUps.magnet = Math.max(0, game.activePowerUps.magnet - dt);
+  }
+  if (game.activePowerUps.slow > 0) {
+    game.activePowerUps.slow = Math.max(0, game.activePowerUps.slow - dt);
+    if (game.activePowerUps.slow === 0) events.push({ type: 'expire', kind: 'slow' });
+  }
+  if (game.activePowerUps.invincible > 0) {
+    game.activePowerUps.invincible = Math.max(0, game.activePowerUps.invincible - dt);
+    if (game.activePowerUps.invincible === 0) {
+      events.push({ type: 'expire', kind: 'invincible' });
+    }
+  }
 
   game.spawnClock += dt;
   if (game.spawnClock >= game.nextSpawn) {
@@ -573,15 +922,28 @@ const stepGame = (game: GameData, delta: number): GameEvent => {
     game.nextSpawn = Math.max(randomGap, clearTime);
   }
 
+  game.coinSpawnClock += dt;
+  if (game.coinSpawnClock >= game.nextCoinSpawn) {
+    spawnCoin(game);
+    game.coinSpawnClock = 0;
+    game.nextCoinSpawn = 0.95 + Math.random() * 1.25;
+  }
+
+  game.powerUpSpawnClock += dt;
+  if (game.powerUpSpawnClock >= game.nextPowerUpSpawn) {
+    spawnPowerUp(game);
+    game.powerUpSpawnClock = 0;
+    game.nextPowerUpSpawn = 10 + Math.random() * 7;
+  }
+
   game.velocityY += GRAVITY * dt;
   game.playerY += game.velocityY * dt;
   const floorY = game.groundY - game.playerH;
-  let event: GameEvent = null;
   if (game.playerY >= floorY) {
     if (!game.playerOnGround) {
       spawnDust(game, 7);
       game.landingPulse = 1;
-      event = 'land';
+      events.push({ type: 'land' });
     }
     game.playerY = floorY;
     game.velocityY = 0;
@@ -590,8 +952,27 @@ const stepGame = (game: GameData, delta: number): GameEvent => {
     game.playerOnGround = false;
   }
 
-  for (const obstacle of game.obstacles) obstacle.x -= speed * dt;
+  for (const obstacle of game.obstacles) obstacle.x -= effectiveSpeed * dt;
   game.obstacles = game.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -30);
+
+  for (const coin of game.coins) {
+    coin.x -= effectiveSpeed * dt;
+    if (game.activePowerUps.magnet > 0) {
+      const targetX = game.playerX + game.playerW * 0.5;
+      const targetY = game.playerY + game.playerH * 0.45;
+      const dx = targetX - coin.x;
+      const dy = targetY - coin.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 280 && distance > 1) {
+        const pull = clamp(940 - distance * 2, 260, 900);
+        coin.x += (dx / distance) * pull * dt;
+        coin.y += (dy / distance) * pull * dt;
+      }
+    }
+  }
+  game.coins = game.coins.filter((coin) => coin.x + coin.radius > -30);
+  for (const powerUp of game.powerUps) powerUp.x -= effectiveSpeed * dt;
+  game.powerUps = game.powerUps.filter((powerUp) => powerUp.x + powerUp.size > -30);
 
   for (const particle of game.dust) {
     particle.life -= dt;
@@ -602,15 +983,62 @@ const stepGame = (game: GameData, delta: number): GameEvent => {
   game.dust = game.dust.filter((particle) => particle.life > 0);
   if (game.playerOnGround && Math.random() < dt * 5.5) spawnDust(game, 1);
 
+  for (const particle of game.effects) {
+    particle.life -= dt;
+    particle.x += particle.vx * dt;
+    particle.y += particle.vy * dt;
+    particle.vy += 55 * dt;
+  }
+  game.effects = game.effects.filter((particle) => particle.life > 0);
+
+  const remainingCoins: Coin[] = [];
+  for (const coin of game.coins) {
+    if (isPlayerNearPoint(game, coin.x, coin.y, coin.radius)) {
+      game.runCoins += 1;
+      game.totalCoins += 1;
+      spawnEffectParticles(game, '#f5bc62', 7, coin.x, coin.y);
+      events.push({ type: 'coin' });
+    } else {
+      remainingCoins.push(coin);
+    }
+  }
+  game.coins = remainingCoins;
+
+  const remainingPowerUps: PowerUp[] = [];
+  for (const powerUp of game.powerUps) {
+    if (isPlayerNearPoint(game, powerUp.x, powerUp.y, powerUp.size)) {
+      const event = activatePowerUp(game, powerUp.kind);
+      if (event) events.push(event);
+    } else {
+      remainingPowerUps.push(powerUp);
+    }
+  }
+  game.powerUps = remainingPowerUps;
+
   const hitObstacle = game.obstacles.find((obstacle) => isColliding(game, obstacle));
   if (hitObstacle) {
-    game.impactPulse = 1;
-    game.impactX = game.playerX + game.playerW * 0.7;
-    game.impactY = game.playerY + game.playerH * 0.45;
-    spawnDust(game, 10);
-    return 'hit';
+    if (game.collisionGrace <= 0) {
+      game.impactPulse = 1;
+      game.impactX = game.playerX + game.playerW * 0.7;
+      game.impactY = game.playerY + game.playerH * 0.45;
+      if (game.activePowerUps.invincible > 0) {
+        if (game.collisionFlash <= 0) {
+          spawnEffectParticles(game, '#ffd579', 12);
+          game.collisionFlash = 0.24;
+        }
+      } else if (game.activePowerUps.shield) {
+        game.activePowerUps.shield = false;
+        game.collisionGrace = 0.34;
+        spawnEffectParticles(game, '#90c8ff', 20);
+        events.push({ type: 'shieldBreak' });
+      } else {
+        spawnDust(game, 10);
+        events.push({ type: 'hit' });
+        return events;
+      }
+    }
   }
-  return event;
+  return events;
 };
 
 function App() {
@@ -620,13 +1048,25 @@ function App() {
   const shownScoreRef = useRef(0);
   const [runState, setRunState] = useState<RunState>('idle');
   const [score, setScore] = useState(0);
-  const [bestScore, setBestScore] = useState(() => {
-    if (typeof window === 'undefined') return 0;
-    const stored = Number(window.localStorage.getItem('fork-runner-best') ?? 0);
-    return Number.isFinite(stored) ? stored : 0;
-  });
+  const [bestScore, setBestScore] = useState(() => readStoredNumber(BEST_SCORE_KEY));
+  const [runCoins, setRunCoins] = useState(0);
+  const [totalCoins, setTotalCoins] = useState(() => readStoredNumber(TOTAL_COINS_KEY));
+  const [hudTick, setHudTick] = useState(0);
 
-  const playSound = useCallback((kind: 'jump' | 'land' | 'hit' | 'ui') => {
+  const playSound = useCallback((
+    kind:
+      | 'jump'
+      | 'land'
+      | 'hit'
+      | 'ui'
+      | 'coin'
+      | 'magnet'
+      | 'shield'
+      | 'slow'
+      | 'invincible'
+      | 'shieldBreak'
+      | 'expire',
+  ) => {
     if (typeof window === 'undefined') return;
     const AudioContextClass = window.AudioContext || (window as typeof window & {
       webkitAudioContext?: typeof AudioContext;
@@ -641,6 +1081,13 @@ function App() {
       land: { frequency: 150, endFrequency: 105, duration: 0.09, type: 'sine' as OscillatorType, volume: 0.035 },
       hit: { frequency: 125, endFrequency: 54, duration: 0.22, type: 'sawtooth' as OscillatorType, volume: 0.055 },
       ui: { frequency: 520, endFrequency: 650, duration: 0.07, type: 'sine' as OscillatorType, volume: 0.03 },
+      coin: { frequency: 720, endFrequency: 1040, duration: 0.1, type: 'triangle' as OscillatorType, volume: 0.04 },
+      magnet: { frequency: 280, endFrequency: 620, duration: 0.24, type: 'triangle' as OscillatorType, volume: 0.045 },
+      shield: { frequency: 180, endFrequency: 440, duration: 0.2, type: 'sine' as OscillatorType, volume: 0.05 },
+      slow: { frequency: 330, endFrequency: 180, duration: 0.3, type: 'square' as OscillatorType, volume: 0.032 },
+      invincible: { frequency: 520, endFrequency: 880, duration: 0.28, type: 'sawtooth' as OscillatorType, volume: 0.038 },
+      shieldBreak: { frequency: 240, endFrequency: 70, duration: 0.2, type: 'sawtooth' as OscillatorType, volume: 0.05 },
+      expire: { frequency: 190, endFrequency: 110, duration: 0.16, type: 'sine' as OscillatorType, volume: 0.03 },
     }[kind];
     const oscillator = audio.createOscillator();
     const gain = audio.createGain();
@@ -659,7 +1106,10 @@ function App() {
 
   const resetAndStart = useCallback(() => {
     const current = gameRef.current;
-    const fresh = makeGame(Math.max(current.best, bestScore));
+    const fresh = makeGame(
+      Math.max(current.best, bestScore),
+      Math.max(current.totalCoins, totalCoins),
+    );
     fresh.width = current.width;
     fresh.height = current.height;
     fresh.groundY = current.groundY;
@@ -670,9 +1120,10 @@ function App() {
     gameRef.current = fresh;
     shownScoreRef.current = 0;
     setScore(0);
+    setRunCoins(0);
     setRunState('running');
     playSound('ui');
-  }, [bestScore, playSound]);
+  }, [bestScore, playSound, totalCoins]);
 
   const performJumpOrStart = useCallback(() => {
     if (runState !== 'running') {
@@ -734,6 +1185,7 @@ function App() {
 
     let animationFrame = 0;
     let previousTime = performance.now();
+    let hudAccumulator = 0;
     const animate = (now: number) => {
       const game = gameRef.current;
       if (document.hidden) {
@@ -741,19 +1193,42 @@ function App() {
         animationFrame = requestAnimationFrame(animate);
         return;
       }
-       const event = stepGame(game, (now - previousTime) / 1000);
+      const frameDelta = (now - previousTime) / 1000;
+      const events = stepGame(game, frameDelta);
       previousTime = now;
+      hudAccumulator += frameDelta;
       drawWorld(game, context);
       if (game.score !== shownScoreRef.current) {
         shownScoreRef.current = game.score;
         setScore(game.score);
       }
-       if (event === 'land') playSound('land');
-       if (event === 'hit') {
-         playSound('hit');
+      if (hudAccumulator >= 0.08) {
+        hudAccumulator = 0;
+        setHudTick((tick) => tick + 1);
+      }
+
+      let hit = false;
+      for (const event of events) {
+        if (!event) continue;
+        if (event.type === 'land') playSound('land');
+        if (event.type === 'coin') {
+          playSound('coin');
+          setRunCoins(game.runCoins);
+          setTotalCoins(game.totalCoins);
+          writeStoredNumber(TOTAL_COINS_KEY, game.totalCoins);
+        }
+        if (event.type === 'powerup') playSound(event.kind);
+        if (event.type === 'shieldBreak') playSound('shieldBreak');
+        if (event.type === 'expire') playSound('expire');
+        if (event.type === 'hit') {
+          playSound('hit');
+          hit = true;
+        }
+      }
+      if (hit) {
         game.best = Math.max(game.best, game.score);
         setBestScore(game.best);
-        window.localStorage.setItem('fork-runner-best', String(game.best));
+        writeStoredNumber(BEST_SCORE_KEY, game.best);
         setRunState('over');
         return;
       }
@@ -774,6 +1249,8 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [performJumpOrStart]);
+
+  const activePowerUps = gameRef.current.activePowerUps;
 
   return (
     <main className="runner-app" data-testid="game-shell">
@@ -803,8 +1280,64 @@ function App() {
               {String(bestScore).padStart(4, '0')}
             </span>
           </div>
+          <div className="score-block coin-block">
+            <span className="score-label">Coins</span>
+            <span className="coin-value" data-testid="text-coins">
+              <span className="coin-glyph" aria-hidden="true">◆</span>
+              {runCoins}
+              <small>/ {totalCoins}</small>
+            </span>
+          </div>
         </div>
       </header>
+
+      <div className="powerup-hud" data-hud-tick={hudTick} aria-live="polite">
+        {activePowerUps.magnet > 0 && (
+          <div className="powerup-chip magnet-chip">
+            <span className="powerup-icon">M</span>
+            <span className="powerup-copy">
+              <strong>Magnet</strong>
+              <small>{Math.ceil(activePowerUps.magnet)}s</small>
+            </span>
+            <span className="powerup-progress">
+              <i style={{ width: `${(activePowerUps.magnet / MAGNET_DURATION) * 100}%` }} />
+            </span>
+          </div>
+        )}
+        {activePowerUps.shield && (
+          <div className="powerup-chip shield-chip">
+            <span className="powerup-icon">S</span>
+            <span className="powerup-copy">
+              <strong>Shield</strong>
+              <small>1 hit</small>
+            </span>
+          </div>
+        )}
+        {activePowerUps.slow > 0 && (
+          <div className="powerup-chip slow-chip">
+            <span className="powerup-icon">T</span>
+            <span className="powerup-copy">
+              <strong>Slow</strong>
+              <small>{Math.ceil(activePowerUps.slow)}s</small>
+            </span>
+            <span className="powerup-progress">
+              <i style={{ width: `${(activePowerUps.slow / SLOW_DURATION) * 100}%` }} />
+            </span>
+          </div>
+        )}
+        {activePowerUps.invincible > 0 && (
+          <div className={`powerup-chip invincible-chip${activePowerUps.invincible < 1 ? ' powerup-flashing' : ''}`}>
+            <span className="powerup-icon">✦</span>
+            <span className="powerup-copy">
+              <strong>Invincible</strong>
+              <small>{Math.ceil(activePowerUps.invincible)}s</small>
+            </span>
+            <span className="powerup-progress">
+              <i style={{ width: `${(activePowerUps.invincible / INVINCIBLE_DURATION) * 100}%` }} />
+            </span>
+          </div>
+        )}
+      </div>
 
       {runState === 'idle' && (
         <>
@@ -861,8 +1394,14 @@ function App() {
                 </span>
                 <span className="result-label">Best</span>
               </div>
+              <div className="result-stat">
+                <span className="result-number" data-testid="text-final-coins">
+                  {runCoins}
+                </span>
+                <span className="result-label">Coins</span>
+              </div>
             </div>
-             <p className="game-over-note">Ready for another run?</p>
+             <p className="game-over-note">You banked {runCoins} coin{runCoins === 1 ? '' : 's'} this run.</p>
             <button
               className="retry-button"
               type="button"
