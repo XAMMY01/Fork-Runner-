@@ -1,0 +1,457 @@
+FORK RUNNER — V5 UPGRADE
+
+Dynamic Worlds + Permanent Fair Obstacle Generation
+
+Upgrade the existing Fork Runner game directly. Do NOT rebuild the game from scratch and do NOT replace the existing architecture unnecessarily.
+
+The V3/V4 gameplay, controls, power-ups, coins, scoring, high score, localStorage, character, UI, and current sunset/purple desert visual identity are already working.
+
+V5 introduces dynamic environments, BUT the most important requirement is a permanent fix for unfair/impossible fork placement.
+
+⸻
+
+1. CRITICAL: PERMANENT FORK PLACEMENT FIX
+
+There is currently a recurring problem where two forks can spawn with a gap that looks reasonable visually but is actually extremely difficult or nearly impossible to clear.
+
+This has happened relatively early in the game.
+
+Do not simply move those particular forks farther apart or reduce their frequency. Fix the obstacle-generation logic itself.
+
+The game must NEVER intentionally generate an obstacle sequence that requires impossible or near-impossible timing.
+
+Implement a proper obstacle feasibility system.
+
+Every time a new fork or fork pattern is generated, calculate whether the player can realistically survive it based on:
+
+* current player horizontal movement/speed
+* current obstacle speed
+* player jump duration
+* player jump height
+* player collision box
+* fork width
+* actual horizontal distance between obstacles
+* player landing position
+* minimum reaction time
+* current game difficulty
+* whether the previous obstacle has already been cleared
+
+The generator must reject and regenerate any pattern that violates the safe-clearance rules.
+
+⸻
+
+2. HARD MINIMUM SAFE GAP
+
+Create a centralized constant/configuration for the minimum safe horizontal spacing between consecutive forks.
+
+Do NOT scatter random spacing values throughout the code.
+
+Example concept:
+
+MIN_SAFE_FORK_GAP
+
+The exact value should be calculated/tuned using the game’s actual physics rather than blindly using an arbitrary number.
+
+The important rule is:
+
+If the player cannot comfortably complete the required jump sequence with normal timing, the pattern is invalid.
+
+Invalid pattern = discard it and generate another one.
+
+⸻
+
+3. DOUBLE-FORK VALIDATION
+
+Double-fork patterns must be validated before spawning.
+
+A double-fork sequence is only allowed if:
+
+* the first fork can be cleared normally
+* the player has enough time to react after the first fork
+* the second fork is reachable with the current jump physics
+* the player has enough landing/recovery space
+* the required timing is reasonable for a human player
+* the second fork does not effectively force an immediate impossible jump
+
+Do NOT assume that a visually large gap automatically means the sequence is safe.
+
+Validate the actual physics.
+
+⸻
+
+4. TRIPLE-FORK VALIDATION
+
+Apply the same logic to triple-fork patterns.
+
+Triple forks should be challenging but always physically survivable.
+
+If the game cannot confidently prove the triple pattern is safe:
+
+DO NOT SPAWN IT.
+
+Generate a different pattern.
+
+The player should lose because of poor timing/reaction, NOT because the generator created an unavoidable obstacle arrangement.
+
+⸻
+
+5. EARLY-GAME PROTECTION
+
+This is especially important.
+
+The problematic fork sequences currently appear too early.
+
+Create a difficulty-aware spawning system.
+
+Early game:
+
+Mostly single forks.
+
+Avoid aggressive double/triple combinations.
+
+Mid game:
+
+Gradually introduce validated double-fork patterns.
+
+Later game:
+
+Validated triple patterns can appear more frequently.
+
+However:
+
+Difficulty may increase pattern complexity, but it must NEVER reduce the minimum physical survivability of a pattern.
+
+⸻
+
+6. ADD A REGENERATION SAFETY LOOP
+
+Before an obstacle pattern is actually inserted into the game:
+
+1. Generate candidate pattern.
+2. Calculate its timing and horizontal spacing.
+3. Simulate/estimate whether the player can clear it.
+4. Check minimum safe gap.
+5. Check reaction time.
+6. Check landing/recovery requirements.
+7. If unsafe → reject it.
+8. Generate another candidate.
+9. Repeat until a valid pattern is found.
+
+Add a reasonable maximum number of attempts to prevent an infinite loop.
+
+If no valid complex pattern is found after the maximum attempts:
+
+Fall back to a simple single-fork obstacle.
+
+Never force an unsafe pattern just because the generator could not find another one.
+
+⸻
+
+7. PREVENT CHAINED IMPOSSIBLE SEQUENCES
+
+The generator must consider the previous obstacle(s), not just the next obstacle individually.
+
+For example:
+
+Fork → Fork
+
+may individually look safe,
+
+but:
+
+Fork → Fork → Fork
+
+could create an impossible chain.
+
+Therefore validate the entire upcoming sequence.
+
+The generator should maintain awareness of the last few obstacles and prevent:
+
+* extremely short recovery windows
+* repeated forced jumps
+* overlapping jump requirements
+* back-to-back obstacles that require impossible landing timing
+* patterns where the player must immediately jump again before recovery
+* combinations that effectively create an unavoidable collision
+
+⸻
+
+8. POWER-UP INTERACTION
+
+Do NOT make power-ups required to survive normal fork patterns.
+
+A Shield, Slow Motion, Magnet, or Invincibility power-up may make difficult sections easier, but:
+
+Every normal obstacle sequence must remain survivable WITHOUT using a power-up.
+
+Do not use the existence of power-ups as justification for unfair obstacle spacing.
+
+⸻
+
+9. KEEP V3 DIFFICULTY BALANCE
+
+Do NOT undo the V3 improvements.
+
+Keep:
+
+* gradual difficulty progression
+* controlled acceleration
+* sensible maximum speed
+* fair double/triple patterns
+* reaction-time-based difficulty
+* current jump physics
+
+Do not simply make the game slower to hide the problem.
+
+The objective is:
+
+better obstacle generation, not easier gameplay.
+
+⸻
+
+10. V5 DYNAMIC WORLDS
+
+After fixing the obstacle-generation system, implement dynamic environments.
+
+Change the visual environment every 150 score points.
+
+Suggested progression:
+
+0–149 → Sunset Desert
+150–299 → Night Desert
+300–449 → Forest
+450–599 → Neon/City
+600–749 → Storm/Dark Environment
+750+ → Continue cycling through environments or introduce additional variations
+
+You may adjust the exact environment list if the existing game’s visual style benefits from better alternatives.
+
+⸻
+
+11. SMOOTH WORLD TRANSITIONS
+
+Environment changes must feel polished.
+
+Do NOT instantly replace the entire background.
+
+Use:
+
+* smooth color transitions
+* gradual background changes
+* subtle atmospheric effects
+* gradual lighting changes
+* smooth parallax changes
+
+The player should clearly feel that they entered a new world.
+
+The transition itself must not interfere with gameplay.
+
+⸻
+
+12. GAMEPLAY MUST REMAIN IDENTICAL ACROSS WORLDS
+
+Changing environments must NOT change:
+
+* player physics
+* jump height
+* jump duration
+* collision dimensions
+* fork collision behavior
+* movement controls
+* score calculation
+* coin behavior
+* power-up behavior
+
+Unless explicitly configured later, worlds are visual/gameplay themes only.
+
+⸻
+
+13. SCORE THRESHOLD HANDLING
+
+World transitions must trigger reliably at:
+
+150
+300
+450
+600
+750
+etc.
+
+Make sure:
+
+* the transition happens exactly when the threshold is reached
+* it does not repeatedly trigger every frame
+* restarting the game resets the current environment appropriately
+* high score does not accidentally trigger a world transition on a new run
+* the environment is based on the CURRENT RUN SCORE
+
+⸻
+
+14. PRESERVE V4 FEATURES
+
+Do NOT remove or break:
+
+Coins
+
+* collectible coins
+* persistent total coins
+* coin counter
+* localStorage persistence
+
+Coin Magnet
+
+* attracts nearby coins
+* temporary duration
+* visible effect
+
+Shield
+
+* absorbs one fork collision
+* disappears after absorbing collision
+
+Slow Motion
+
+* temporarily slows gameplay
+* temporary HUD indicator
+
+Invincibility
+
+* approximately 5 seconds
+* complete fork collision immunity
+* obvious visual effect
+
+Power-ups remain optional and should never be required for survival.
+
+⸻
+
+15. VISUAL QUALITY
+
+Keep the existing Fork Runner identity.
+
+Do not turn the game into a completely different game.
+
+Maintain:
+
+* current player character
+* fork obstacles
+* polished UI
+* score
+* high score
+* coin counter
+* power-up indicators
+* start screen
+* Game Over screen
+* Retry button
+* mobile controls
+* desktop keyboard controls
+
+Make the new environments feel like natural expansions of the existing game.
+
+⸻
+
+16. PERFORMANCE
+
+The game must remain lightweight and responsive.
+
+Avoid:
+
+* unnecessarily huge assets
+* excessive DOM elements
+* expensive calculations every frame
+* memory leaks
+* continuously accumulating unused obstacles
+* unnecessary rendering work
+
+The obstacle validation system should be efficient.
+
+Prefer calculating feasibility when generating an obstacle pattern rather than performing expensive full simulations every animation frame.
+
+⸻
+
+17. DEBUG/TEST THE FORK GENERATOR
+
+Before considering V5 complete, deliberately test:
+
+Test A
+
+Start a new game and repeatedly jump through the first 20–30 obstacles.
+
+Test B
+
+Test the transition from single → double forks.
+
+Test C
+
+Test double → triple patterns.
+
+Test D
+
+Test high-speed gameplay.
+
+Test E
+
+Test consecutive obstacle sequences.
+
+Test F
+
+Test after power-ups are active.
+
+Test G
+
+Test mobile controls.
+
+Test H
+
+Test multiple complete runs.
+
+The same problematic “two forks that look spaced apart but are almost impossible to pass” situation must no longer occur.
+
+⸻
+
+18. IMPORTANT FINAL RULE
+
+Do NOT solve the fork problem by simply:
+
+* removing double forks
+* making all obstacles farther apart
+* dramatically slowing the game
+* reducing the difficulty
+* deleting existing obstacle patterns
+* giving the player automatic protection
+
+Instead, fix the underlying procedural obstacle-generation algorithm.
+
+The final game should remain challenging.
+
+The difference is:
+
+CHALLENGING = requires good timing.
+
+UNFAIR = mathematically/physically unreasonable obstacle placement.
+
+V5 must eliminate the second category permanently.
+
+⸻
+
+IMPLEMENTATION REQUIREMENT
+
+Inspect the existing obstacle-generation and collision/jump code first.
+
+Identify exactly why the current problematic fork spacing can pass through the generator.
+
+Then modify the existing system rather than creating a parallel obstacle system.
+
+After implementation:
+
+* test the game
+* test the fork generator repeatedly
+* verify V4 power-ups still work
+* verify coins still persist
+* verify score/high score still work
+* verify world transitions at 150-point intervals
+* verify mobile and desktop controls
+* fix any errors found
+
+Do not stop at explaining what should be changed.
+
+IMPLEMENT THE CHANGES DIRECTLY IN THE EXISTING FORK RUNNER PROJECT.

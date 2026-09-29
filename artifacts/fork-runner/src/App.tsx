@@ -97,6 +97,9 @@ type GameData = {
   impactPulse: number;
   impactX: number;
   impactY: number;
+  worldFrom: number;
+  worldTo: number;
+  worldTransition: number;
 };
 
 type DifficultyProfile = {
@@ -112,10 +115,14 @@ const clamp = (value: number, min: number, max: number) =>
 const GRAVITY = 2250;
 const JUMP_VELOCITY = 825;
 const JUMP_FLIGHT_TIME = (JUMP_VELOCITY * 2) / GRAVITY;
-const PATTERN_MARGIN = 0.055;
 const MAGNET_DURATION = 7;
 const SLOW_DURATION = 5;
 const INVINCIBLE_DURATION = 5;
+const WORLD_SCORE_INTERVAL = 150;
+const MIN_REACTION_TIME = 0.24;
+const LANDING_RECOVERY_TIME = 0.16;
+const AIRBORNE_MARGIN = 0.11;
+const MAX_PATTERN_ATTEMPTS = 8;
 const BEST_SCORE_KEY = 'fork-runner-best';
 const TOTAL_COINS_KEY = 'fork-runner-coins';
 
@@ -163,24 +170,68 @@ const getSafeAirborneWindow = (obstacleHeight: number) => {
   };
 };
 
+const getMinimumSafeForkGap = (
+  speed: number,
+  forkWidth: number,
+  playerW: number,
+) => {
+  // The gap is derived from the effective obstacle speed and the actual
+  // collision widths, rather than being a visual spacing guess. This is the
+  // minimum edge-to-edge room needed before a new jump window can be trusted.
+  const collisionWidth = forkWidth * 0.46 + playerW * 0.65;
+  const motionBuffer = speed * 0.075;
+  return Math.max(28, Math.ceil(collisionWidth * 0.18 + motionBuffer));
+};
+
 const isPatternAchievable = (
   offsets: number[],
   speed: number,
   forkWidth: number,
   obstacleHeight: number,
+  firstX: number,
+  playerX: number,
+  playerW: number,
 ) => {
+  if (!offsets.length || speed <= 0) return false;
+
   const safeWindow = getSafeAirborneWindow(obstacleHeight);
+  const airborneDuration = safeWindow.end - safeWindow.start - AIRBORNE_MARGIN;
+  const minimumGap = getMinimumSafeForkGap(speed, forkWidth, playerW);
+  const firstApproachTime =
+    (firstX - (playerX + playerW * 0.83)) / speed;
+
+  // A pattern must leave a real human reaction window before its first fork.
+  if (firstApproachTime < MIN_REACTION_TIME) return false;
+
+  for (let index = 1; index < offsets.length; index += 1) {
+    const edgeGap = offsets[index] - (offsets[index - 1] + forkWidth);
+    if (edgeGap < minimumGap) return false;
+  }
+
+  // Prefer one normal jump for a pattern. This proves that every fork in the
+  // chain fits inside the player's real airborne clearance window.
   const lastOffset = offsets[offsets.length - 1] ?? 0;
   const patternTime = (lastOffset + forkWidth) / speed;
-  const minimumSeparation = forkWidth + 18;
+  if (patternTime <= airborneDuration) return true;
 
-  return (
-    offsets.every(
-      (offset, index) =>
-        index === 0 || offset - offsets[index - 1] >= minimumSeparation,
-    ) &&
-    patternTime <= safeWindow.end - safeWindow.start - PATTERN_MARGIN
-  );
+  // If a future pattern needs multiple jumps, explicitly require enough
+  // landing and reaction time between jump windows. Current candidates usually
+  // fail the single-jump test first, but this keeps the validator complete.
+  let jumpGroupStart = offsets[0];
+  for (let index = 1; index < offsets.length; index += 1) {
+    const groupTime =
+      (offsets[index] + forkWidth - jumpGroupStart) / speed;
+    if (groupTime <= airborneDuration) continue;
+
+    const previousEnd = offsets[index - 1] + forkWidth;
+    const recoveryTime = (offsets[index] - previousEnd) / speed;
+    if (recoveryTime < LANDING_RECOVERY_TIME + MIN_REACTION_TIME) {
+      return false;
+    }
+    jumpGroupStart = offsets[index];
+  }
+
+  return (lastOffset + forkWidth - jumpGroupStart) / speed <= airborneDuration;
 };
 
 const getDifficulty = (score: number): DifficultyProfile => {
@@ -241,6 +292,9 @@ const makeGame = (best = 0, totalCoins = 0): GameData => ({
   impactPulse: 0,
   impactX: 0,
   impactY: 0,
+  worldFrom: 0,
+  worldTo: 0,
+  worldTransition: 1,
 });
 
 const roundedRect = (
@@ -270,16 +324,173 @@ const drawCloud = (
   x: number,
   y: number,
   scale: number,
+  color = '#fff1d5',
 ) => {
   context.save();
   context.globalAlpha = 0.13;
-  context.fillStyle = '#fff1d5';
+  context.fillStyle = color;
   context.beginPath();
   context.ellipse(x, y, 46 * scale, 10 * scale, 0, 0, Math.PI * 2);
   context.ellipse(x - 25 * scale, y + 4 * scale, 25 * scale, 8 * scale, 0, 0, Math.PI * 2);
   context.ellipse(x + 19 * scale, y + 1 * scale, 31 * scale, 11 * scale, 0, 0, Math.PI * 2);
   context.fill();
   context.restore();
+};
+
+type WorldTheme = {
+  name: string;
+  top: string;
+  middle: string;
+  horizon: string;
+  ground: string;
+  accent: string;
+  atmosphere: string;
+};
+
+const WORLD_THEMES: WorldTheme[] = [
+  {
+    name: 'Sunset Desert',
+    top: '#33234a',
+    middle: '#a86683',
+    horizon: '#67466a',
+    ground: '#2b1d3c',
+    accent: '#f5bc62',
+    atmosphere: '#ffdda0',
+  },
+  {
+    name: 'Night Desert',
+    top: '#10182f',
+    middle: '#394774',
+    horizon: '#293457',
+    ground: '#141c35',
+    accent: '#90c8ff',
+    atmosphere: '#c7d9ff',
+  },
+  {
+    name: 'Moonlit Forest',
+    top: '#122d35',
+    middle: '#34706b',
+    horizon: '#28534f',
+    ground: '#142d2f',
+    accent: '#a6d3bf',
+    atmosphere: '#d2f1ce',
+  },
+  {
+    name: 'Neon City',
+    top: '#1d163d',
+    middle: '#633c78',
+    horizon: '#30224f',
+    ground: '#17162d',
+    accent: '#ff7ab6',
+    atmosphere: '#f6a8ff',
+  },
+  {
+    name: 'Storm Front',
+    top: '#111525',
+    middle: '#3b405a',
+    horizon: '#292d43',
+    ground: '#161925',
+    accent: '#8fe4e8',
+    atmosphere: '#d7e9ef',
+  },
+];
+
+const hexToRgb = (hex: string) => {
+  const value = hex.replace('#', '');
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16),
+  };
+};
+
+const mixHex = (from: string, to: string, amount: number) => {
+  const a = hexToRgb(from);
+  const b = hexToRgb(to);
+  const t = clamp(amount, 0, 1);
+  return `rgb(${Math.round(a.r + (b.r - a.r) * t)}, ${Math.round(
+    a.g + (b.g - a.g) * t,
+  )}, ${Math.round(a.b + (b.b - a.b) * t)})`;
+};
+
+const withAlpha = (rgbColor: string, alpha: number) =>
+  rgbColor.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
+
+const drawWorldBackdrop = (
+  context: CanvasRenderingContext2D,
+  game: GameData,
+  theme: WorldTheme,
+  visualSpeed: number,
+) => {
+  const { width, height, groundY } = game;
+  const detailShift = (game.elapsed * (34 + visualSpeed * 0.07)) % 180;
+  const horizon = groundY * 0.7;
+
+  if (theme.name === 'Moonlit Forest') {
+    context.save();
+    context.globalAlpha = 0.5;
+    context.fillStyle = '#183f40';
+    for (let index = -1; index < width / 105 + 2; index += 1) {
+      const x = index * 105 - detailShift * 0.65;
+      const treeHeight = 45 + ((index * 19) % 42);
+      context.beginPath();
+      context.moveTo(x, groundY);
+      context.lineTo(x + 24, groundY - treeHeight);
+      context.lineTo(x + 48, groundY);
+      context.closePath();
+      context.fill();
+    }
+    context.globalAlpha = 0.28;
+    context.fillStyle = '#a6d3bf';
+    context.beginPath();
+    context.arc(width * 0.78, height * 0.22, 31, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
+
+  if (theme.name === 'Neon City') {
+    context.save();
+    context.globalAlpha = 0.55;
+    const buildingColors = ['#312255', '#412761', '#542b68'];
+    for (let index = -1; index < width / 76 + 2; index += 1) {
+      const x = index * 76 - detailShift * 0.4;
+      const buildingHeight = 36 + ((index * 31) % 75);
+      context.fillStyle = buildingColors[Math.abs(index) % buildingColors.length];
+      context.fillRect(x, horizon - buildingHeight, 58, buildingHeight);
+      context.fillStyle = index % 2 === 0 ? '#ff7ab6' : '#8fe4e8';
+      context.globalAlpha = 0.28;
+      for (let row = 0; row < 3; row += 1) {
+        context.fillRect(x + 10, horizon - buildingHeight + 12 + row * 17, 7, 3);
+        context.fillRect(x + 28, horizon - buildingHeight + 12 + row * 17, 7, 3);
+      }
+      context.globalAlpha = 0.55;
+    }
+    context.restore();
+  }
+
+  if (theme.name === 'Storm Front') {
+    context.save();
+    context.globalAlpha = 0.18;
+    context.fillStyle = '#c9d8e0';
+    for (let index = -1; index < width / 180 + 2; index += 1) {
+      const x = index * 180 - detailShift * 0.35;
+      context.beginPath();
+      context.ellipse(x, height * 0.22 + (index % 2) * 14, 90, 18, 0, 0, Math.PI * 2);
+      context.fill();
+    }
+    if (Math.sin(game.elapsed * 2.1) > 0.92) {
+      context.globalAlpha = 0.5;
+      context.strokeStyle = '#d7e9ef';
+      context.lineWidth = 2;
+      context.beginPath();
+      context.moveTo(width * 0.62, height * 0.18);
+      context.lineTo(width * 0.58, height * 0.34);
+      context.lineTo(width * 0.65, height * 0.29);
+      context.lineTo(width * 0.61, height * 0.45);
+      context.stroke();
+    }
+    context.restore();
+  }
 };
 
 const drawFork = (
@@ -550,25 +761,34 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   if (!width || !height) return;
   const difficulty = getDifficulty(game.score);
   const visualSpeed = difficulty.speed * game.slowBlend;
+  const fromTheme = WORLD_THEMES[game.worldFrom % WORLD_THEMES.length];
+  const toTheme = WORLD_THEMES[game.worldTo % WORLD_THEMES.length];
+  const transition = game.worldTransition * game.worldTransition * (3 - game.worldTransition * 2);
+  const topColor = mixHex(fromTheme.top, toTheme.top, transition);
+  const middleColor = mixHex(fromTheme.middle, toTheme.middle, transition);
+  const horizonColor = mixHex(fromTheme.horizon, toTheme.horizon, transition);
+  const groundColor = mixHex(fromTheme.ground, toTheme.ground, transition);
+  const accentColor = mixHex(fromTheme.accent, toTheme.accent, transition);
+  const atmosphereColor = mixHex(fromTheme.atmosphere, toTheme.atmosphere, transition);
 
   context.clearRect(0, 0, width, height);
 
   const sky = context.createLinearGradient(0, 0, 0, groundY);
-  sky.addColorStop(0, '#33234a');
-  sky.addColorStop(0.55, '#a86683');
-  sky.addColorStop(1, '#ed9a78');
+  sky.addColorStop(0, topColor);
+  sky.addColorStop(0.55, middleColor);
+  sky.addColorStop(1, horizonColor);
   context.fillStyle = sky;
   context.fillRect(0, 0, width, height);
 
   const sunX = width * 0.78;
   const sunY = height * 0.255;
   const sun = context.createRadialGradient(sunX, sunY, 5, sunX, sunY, Math.max(95, width * 0.15));
-  sun.addColorStop(0, 'rgba(255, 239, 187, .82)');
-  sun.addColorStop(0.25, 'rgba(255, 208, 132, .25)');
+  sun.addColorStop(0, withAlpha(atmosphereColor, 0.82));
+  sun.addColorStop(0.25, withAlpha(atmosphereColor, 0.25));
   sun.addColorStop(1, 'rgba(255, 208, 132, 0)');
   context.fillStyle = sun;
   context.fillRect(sunX - 170, sunY - 170, 340, 340);
-  context.fillStyle = '#ffdda0';
+  context.fillStyle = atmosphereColor;
   context.globalAlpha = 0.88;
   context.beginPath();
   context.arc(sunX, sunY, clamp(width * 0.045, 24, 57), 0, Math.PI * 2);
@@ -579,19 +799,19 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
     const starX = ((index * 137 + 31) % 1000) / 1000 * width;
     const starY = (((index * 71 + 17) % 430) / 430) * groundY * 0.53;
     const starSize = index % 4 === 0 ? 1.5 : 0.8;
-    context.globalAlpha = 0.28 + (index % 3) * 0.08;
-    context.fillStyle = '#fff1d5';
+    context.globalAlpha = (0.28 + (index % 3) * 0.08) * (0.7 + transition * 0.3);
+    context.fillStyle = atmosphereColor;
     context.fillRect(starX, starY, starSize, starSize);
   }
   context.globalAlpha = 1;
 
   const cloudShift = (game.elapsed * (10 + visualSpeed * 0.025)) % (width + 220);
-  drawCloud(context, width * 0.13 - cloudShift, height * 0.2, 0.8);
-  drawCloud(context, width * 0.66 - (cloudShift * 0.65), height * 0.14, 0.55);
-  drawCloud(context, width + 110 - (cloudShift * 0.36), height * 0.33, 0.68);
+  drawCloud(context, width * 0.13 - cloudShift, height * 0.2, 0.8, atmosphereColor);
+  drawCloud(context, width * 0.66 - (cloudShift * 0.65), height * 0.14, 0.55, atmosphereColor);
+  drawCloud(context, width + 110 - (cloudShift * 0.36), height * 0.33, 0.68, atmosphereColor);
 
   const farHorizon = groundY * 0.7;
-  context.fillStyle = '#67466a';
+  context.fillStyle = horizonColor;
   context.globalAlpha = 0.68;
   context.beginPath();
   context.moveTo(0, farHorizon + 18);
@@ -607,7 +827,8 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   context.globalAlpha = 1;
 
   const nearHorizon = groundY * 0.77;
-  context.fillStyle = '#3f3151';
+  context.fillStyle = groundColor;
+  context.globalAlpha = 0.72;
   context.beginPath();
   context.moveTo(0, nearHorizon + 19);
   for (let index = 0; index <= 13; index += 1) {
@@ -619,25 +840,37 @@ const drawWorld = (game: GameData, context: CanvasRenderingContext2D) => {
   context.lineTo(0, groundY);
   context.closePath();
   context.fill();
+  context.globalAlpha = 1;
 
+  context.save();
+  context.globalAlpha = 1 - transition;
   const detailShift = (game.elapsed * (34 + visualSpeed * 0.07)) % 180;
   for (let index = -1; index < width / 180 + 2; index += 1) {
     drawCactus(context, index * 180 - detailShift + 52, groundY - 4, index % 2 === 0 ? 0.8 : 0.55);
   }
+  context.restore();
+  context.save();
+  context.globalAlpha = transition;
+  drawWorldBackdrop(context, game, toTheme, visualSpeed);
+  context.restore();
 
-  context.fillStyle = '#2b1d3c';
+  context.fillStyle = groundColor;
   context.fillRect(0, groundY, width, height - groundY);
-  context.fillStyle = 'rgba(245, 188, 98, .22)';
+  context.fillStyle = accentColor;
+  context.globalAlpha = 0.22;
   context.fillRect(0, groundY, width, 2);
-  context.fillStyle = 'rgba(166, 211, 191, .2)';
+  context.fillStyle = atmosphereColor;
+  context.globalAlpha = 0.2;
   const dashShift = (game.elapsed * (visualSpeed * 0.88)) % 98;
   for (let index = -1; index < width / 98 + 2; index += 1) {
     context.fillRect(index * 98 - dashShift, groundY + 29, 43, 2);
   }
-  context.fillStyle = 'rgba(245, 188, 98, .12)';
+  context.fillStyle = accentColor;
+  context.globalAlpha = 0.12;
   for (let index = 0; index < width / 58 + 2; index += 1) {
     context.fillRect(index * 58 - ((game.elapsed * (52 + visualSpeed * 0.04)) % 58), groundY + 52, 21, 1);
   }
+  context.globalAlpha = 1;
 
   for (const particle of game.dust) {
     context.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1) * 0.55;
@@ -819,10 +1052,18 @@ const stepGame = (game: GameData, delta: number): GameEvent[] => {
   const scoreRate = 9.5 + Math.min(1.6, game.elapsed / 70);
   game.score = Math.floor(game.elapsed * scoreRate);
   const difficulty = getDifficulty(game.score);
-  const speed = difficulty.speed;
+  const baseSpeed = difficulty.speed;
+  const targetWorld = Math.floor(game.score / WORLD_SCORE_INTERVAL);
+  if (targetWorld !== game.worldTo) {
+    game.worldFrom = game.worldTo;
+    game.worldTo = targetWorld;
+    game.worldTransition = 0;
+  }
+  game.worldTransition = Math.min(1, game.worldTransition + dt * 0.9);
   const targetSlowBlend = game.activePowerUps.slow > 0 ? 0.56 : 1;
   game.slowBlend += (targetSlowBlend - game.slowBlend) * Math.min(1, dt * 6);
-  const effectiveSpeed = speed * game.slowBlend;
+  const effectiveSpeed = baseSpeed * game.slowBlend;
+  const speed = effectiveSpeed;
   const events: GameEvent[] = [];
   game.landingPulse = Math.max(0, game.landingPulse - dt * 3.8);
   game.impactPulse = Math.max(0, game.impactPulse - dt * 2.8);
@@ -855,71 +1096,131 @@ const stepGame = (game: GameData, delta: number): GameEvent[] => {
       largeFork ? 96 : 88,
     );
     const firstX = game.width + 42;
-    const patternRoll = Math.random();
-    const candidates: number[][] = [[0]];
+    const validationHeight = Math.min(96, obstacleHeight + 5);
+    const minimumGap = getMinimumSafeForkGap(speed, forkWidth, game.playerW);
+    const previousObstacle = game.obstacles[game.obstacles.length - 1];
+    const previousGap = previousObstacle
+      ? firstX - (previousObstacle.x + previousObstacle.width)
+      : Number.POSITIVE_INFINITY;
 
-    if (difficulty.level === 2 && patternRoll < 0.24) {
-      candidates.unshift([0, 112 + Math.random() * 18]);
-    } else if (difficulty.level === 3) {
-      if (patternRoll < 0.2) {
-        candidates.unshift([0, 68 + Math.random() * 10, 138 + Math.random() * 14]);
-      } else if (patternRoll < 0.52) {
-        candidates.unshift([0, 112 + Math.random() * 18]);
+    // Validate the real gap to the previous surviving obstacle as well as the
+    // new pattern. If the previous fork has not moved far enough away yet,
+    // defer this spawn instead of creating a chained sequence.
+    if (previousGap < minimumGap) {
+      game.spawnClock = 0;
+      game.nextSpawn = Math.max(0.18, (minimumGap - previousGap) / speed);
+    } else {
+      const makeCandidate = () => {
+        const patternRoll = Math.random();
+        if (difficulty.level === 2 && patternRoll < 0.24) {
+          return [0, 112 + Math.random() * 18];
+        }
+        if (difficulty.level === 3) {
+          if (patternRoll < 0.2) {
+            return [0, 68 + Math.random() * 10, 138 + Math.random() * 14];
+          }
+          if (patternRoll < 0.52) {
+            return [0, 112 + Math.random() * 18];
+          }
+        }
+        if (difficulty.level === 4) {
+          if (patternRoll < 0.2) {
+            return [0, 72 + Math.random() * 12, 145 + Math.random() * 15];
+          }
+          if (patternRoll < 0.55) {
+            return [0, 108 + Math.random() * 18];
+          }
+        }
+        if (difficulty.level === 5) {
+          if (patternRoll < 0.13) {
+            return [
+              0,
+              56 + Math.random() * 8,
+              114 + Math.random() * 12,
+              171 + Math.random() * 14,
+            ];
+          }
+          if (patternRoll < 0.36) {
+            return [0, 76 + Math.random() * 12, 153 + Math.random() * 16];
+          }
+          if (patternRoll < 0.65) {
+            return [0, 106 + Math.random() * 18];
+          }
+        }
+        return [0];
+      };
+
+      let offsets: number[] | null = null;
+      for (let attempt = 0; attempt < MAX_PATTERN_ATTEMPTS; attempt += 1) {
+        const candidate = makeCandidate();
+        if (
+          isPatternAchievable(
+            candidate,
+            speed,
+            forkWidth,
+            validationHeight,
+            firstX,
+            game.playerX,
+            game.playerW,
+          )
+        ) {
+          offsets = candidate;
+          break;
+        }
       }
-    } else if (difficulty.level === 4) {
-      if (patternRoll < 0.2) {
-        candidates.unshift([0, 72 + Math.random() * 12, 145 + Math.random() * 15]);
-      } else if (patternRoll < 0.55) {
-        candidates.unshift([0, 108 + Math.random() * 18]);
-      }
-    } else if (difficulty.level === 5) {
-      if (patternRoll < 0.13) {
-        candidates.unshift([
-          0,
-          56 + Math.random() * 8,
-          114 + Math.random() * 12,
-          171 + Math.random() * 14,
-        ]);
-      } else if (patternRoll < 0.36) {
-        candidates.unshift([0, 76 + Math.random() * 12, 153 + Math.random() * 16]);
-      } else if (patternRoll < 0.65) {
-        candidates.unshift([0, 106 + Math.random() * 18]);
+      // A simple fork is still validated through the same path. It is the
+      // only acceptable fallback when no complex candidate proves safe.
+      offsets =
+        offsets ??
+        (isPatternAchievable(
+          [0],
+          speed,
+          forkWidth,
+          validationHeight,
+          firstX,
+          game.playerX,
+          game.playerW,
+        )
+          ? [0]
+          : null);
+
+      if (!offsets) {
+        game.spawnClock = 0;
+        game.nextSpawn = 0.3;
+      } else {
+        offsets.forEach((offset, index) => {
+          game.obstacles.push({
+            x: firstX + offset,
+            width: forkWidth,
+            height: clamp(
+              obstacleHeight - (index % 2 === 1 ? 7 : 0) + Math.random() * 5,
+              50,
+              96,
+            ),
+            lean: (Math.random() - 0.5) * 0.08,
+          });
+        });
+
+        game.spawnClock = 0;
+        const patternEnd = offsets[offsets.length - 1] + forkWidth;
+        const safeWindow = getSafeAirborneWindow(validationHeight);
+        const landingBuffer = Math.max(
+          LANDING_RECOVERY_TIME + MIN_REACTION_TIME,
+          JUMP_FLIGHT_TIME - safeWindow.start + 0.12,
+        );
+        const clearTime = patternEnd / speed + landingBuffer;
+        const randomGap =
+          difficulty.minSpawnGap +
+          Math.random() * (difficulty.maxSpawnGap - difficulty.minSpawnGap);
+        // The next spawn is still governed by V3's difficulty gaps, while the
+        // real previous-fork gap is checked again when insertion occurs.
+        game.nextSpawn = Math.max(
+          randomGap,
+          clearTime,
+          (patternEnd + minimumGap) / speed,
+        );
       }
     }
-
-    const validationHeight = Math.min(96, obstacleHeight + 5);
-    const offsets =
-      candidates.find((candidate) =>
-        isPatternAchievable(candidate, speed, forkWidth, validationHeight),
-      ) ?? [0];
-
-    offsets.forEach((offset, index) => {
-      game.obstacles.push({
-        x: firstX + offset,
-        width: forkWidth,
-        height: clamp(
-          obstacleHeight - (index % 2 === 1 ? 7 : 0) + Math.random() * 5,
-          50,
-          96,
-        ),
-        lean: (Math.random() - 0.5) * 0.08,
-      });
-    });
-
-    game.spawnClock = 0;
-    const patternEnd = offsets[offsets.length - 1] + forkWidth;
-    const safeWindow = getSafeAirborneWindow(validationHeight);
-    const landingBuffer = Math.max(
-      0.7,
-      JUMP_FLIGHT_TIME - safeWindow.start + 0.12,
-    );
-    const clearTime = patternEnd / speed + landingBuffer;
-    const randomGap =
-      difficulty.minSpawnGap +
-      Math.random() * (difficulty.maxSpawnGap - difficulty.minSpawnGap);
-    // Keep a landing window after every pattern so a close sequence is
-    // demanding but never requires a double-jump or an impossible landing.
-    game.nextSpawn = Math.max(randomGap, clearTime);
   }
 
   game.coinSpawnClock += dt;
