@@ -10,7 +10,7 @@ Fork Runner is a responsive endless-runner browser game where players jump over 
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Fork Runner requires no secrets or database. The separate API/database packages would need `DATABASE_URL` if you choose to use them.
 
 ## Stack
 
@@ -46,7 +46,7 @@ Fork Runner is a responsive endless-runner browser game where players jump over 
 
 ## Gotchas
 
-- The game workflow provides `PORT` and `BASE_PATH`; run it through the managed workflow or use the artifact preview rather than starting Vite without those variables.
+- Start `artifacts/fork-runner: web` in Replit's Workflows panel and open the Fork Runner preview at `/`. The managed workflow provides `PORT` and `BASE_PATH`; do not start Vite without those variables.
 - `body` and `.runner-app` intentionally hide overflow and set `touch-action: none` so mobile play does not scroll the page.
 
 ## Pointers
