@@ -4,6 +4,8 @@ Fork Runner is a responsive endless-runner browser game where players jump over 
 
 ## Run & Operate
 
+- `pnpm install --frozen-lockfile` — install the imported workspace dependencies.
+- In Replit, start `artifacts/fork-runner: web` and open the Fork Runner preview at `/`. This is the only service needed to play; leave the API and Canvas workflows stopped.
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm --filter @workspace/fork-runner run dev` — run the game preview
 - `pnpm run typecheck` — full typecheck across all packages
@@ -14,7 +16,7 @@ Fork Runner is a responsive endless-runner browser game where players jump over 
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
+- pnpm workspaces, Node.js 20, TypeScript 5.9
 - API: Express 5
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
