@@ -1,0 +1,362 @@
+FORK RUNNER — V6
+
+Customization + Coin Shop + 300-Point Dynamic Worlds
+
+Continue working on the existing Fork Runner project.
+
+Do NOT rebuild the game from scratch. Do NOT replace the existing architecture. Do NOT break the current gameplay, obstacle-generation system, V4 power-ups, coins, scoring, or controls.
+
+The current fork-placement system has been fixed and is working correctly. Do not modify or weaken that system.
+
+⸻
+
+1. CHANGE WORLD TRANSITION INTERVAL
+
+Change the dynamic background/environment transition from:
+
+Every 150 score points
+
+to:
+
+Every 300 score points.
+
+Use:
+
+* 0–299 → World 1
+* 300–599 → World 2
+* 600–899 → World 3
+* 900–1199 → World 4
+* 1200–1499 → World 5
+* 1500+ → continue cycling through the available worlds
+
+The transition should still be smooth and polished.
+
+IMPORTANT:
+
+Do not change obstacle difficulty or speed because of this change.
+
+The world transition is purely based on score.
+
+⸻
+
+2. CHARACTER CUSTOMIZATION SYSTEM
+
+Add a proper character customization system.
+
+The current default player character must remain available and equipped by default.
+
+Create several additional unlockable character skins.
+
+Start with approximately 5–8 characters/skins.
+
+Each should have a clearly different visual identity while still fitting the Fork Runner art style.
+
+Examples:
+
+* Original Runner
+* Shadow Runner
+* Neon Runner
+* Golden Runner
+* Cyber Runner
+* Desert Runner
+* Ice Runner
+* Royal Runner
+
+These are examples; create visually cohesive designs appropriate for the game.
+
+Do NOT introduce completely unrelated art styles.
+
+⸻
+
+3. COIN SHOP
+
+Use the existing persistent coin currency.
+
+Create a Shop/Customization screen where players can:
+
+* view available skins
+* see their coin balance
+* see each skin’s price
+* purchase locked skins
+* equip purchased skins
+* see which skin is currently equipped
+
+Example pricing:
+
+Default → Free
+Skin 2 → 500 coins
+Skin 3 → 1,000 coins
+Skin 4 → 1,500 coins
+Skin 5 → 2,500 coins
+Skin 6 → 4,000 coins
+Skin 7 → 6,000 coins
+Skin 8 → 10,000 coins
+
+You may adjust prices if necessary for balanced progression.
+
+⸻
+
+4. PERSISTENT UNLOCKS
+
+Purchased skins must remain unlocked after:
+
+* Game Over
+* Retry
+* browser refresh
+* closing the browser
+* starting another run
+
+Store:
+
+* total coins
+* purchased skins
+* equipped skin
+
+using localStorage.
+
+Do NOT introduce a backend/database for this.
+
+⸻
+
+5. SHOP UI
+
+Create a polished luxury-style shop interface matching the existing Fork Runner design.
+
+It should clearly show:
+
+COINS: 2,450
+
+Then each character card should show:
+
+* character preview
+* character name
+* price
+* Locked / Unlocked / Equipped
+* Buy button where applicable
+* Equip button after purchase
+
+Prevent purchases when the player doesn’t have enough coins.
+
+Give clear feedback when a purchase succeeds or fails.
+
+⸻
+
+6. CHARACTER DURING GAMEPLAY
+
+When a player equips a skin, that skin should appear as the actual player character during gameplay.
+
+Do NOT change:
+
+* player collision box
+* jump physics
+* movement speed
+* hitbox
+* obstacle interaction
+
+Every skin must use the same gameplay dimensions and physics.
+
+This is purely cosmetic.
+
+⸻
+
+7. COIN ECONOMY
+
+Keep the existing coin collection system.
+
+Do NOT reset the player’s persistent coin balance when:
+
+* starting a new run
+* dying
+* pressing Retry
+
+Coins earned during a completed run should be added to the persistent balance appropriately.
+
+Avoid double-counting coins.
+
+⸻
+
+8. POWER-UPS
+
+Preserve all existing power-ups:
+
+* Coin Magnet
+* Shield
+* Slow Motion
+* Invincibility
+
+Do not change their existing behavior unless required for compatibility.
+
+Do not make any skin provide gameplay advantages.
+
+All characters must be cosmetic only.
+
+⸻
+
+9. CURRENT GAMEPLAY MUST REMAIN UNCHANGED
+
+Do NOT modify the successfully fixed fork-generation system.
+
+In particular, preserve:
+
+* minimum safe fork spacing
+* obstacle feasibility validation
+* double-fork validation
+* triple-fork validation
+* recovery-time checks
+* reaction-time checks
+* fallback obstacle generation
+* current V3 difficulty progression
+
+The game should remain exactly as fair and challenging as it is now.
+
+⸻
+
+10. WORLD SYSTEM
+
+Keep the existing dynamic worlds, but update their thresholds to 300 points.
+
+For example:
+
+0–299 → Sunset Desert
+300–599 → Night Desert
+600–899 → Forest
+900–1199 → Neon City
+1200–1499 → Storm/Dark World
+1500+ → cycle through available worlds
+
+Make the transitions smooth.
+
+Do not reset the world when collecting a power-up or entering the shop.
+
+A new run should begin at World 1 based on its score.
+
+⸻
+
+11. MENU NAVIGATION
+
+Add a clear way to access the customization/shop screen from the game’s existing interface.
+
+Possible structure:
+
+START GAME
+SHOP / CUSTOMIZE
+HIGH SCORE
+COINS
+
+Keep the interface simple and mobile-friendly.
+
+Do not clutter the screen.
+
+⸻
+
+12. MOBILE SUPPORT
+
+The customization/shop interface must work properly on phones.
+
+Make sure:
+
+* buttons are large enough to tap
+* character cards fit smaller screens
+* scrolling works smoothly
+* no UI overlaps
+* coin balance remains visible
+* gameplay controls remain unchanged
+
+Test specifically for mobile portrait orientation.
+
+⸻
+
+13. VISUAL QUALITY
+
+Keep the current Fork Runner identity.
+
+The shop should feel like part of the same game rather than a completely separate application.
+
+Use:
+
+* polished transitions
+* subtle animations
+* clear locked/unlocked states
+* satisfying purchase feedback
+* clean typography
+* consistent UI
+* consistent visual effects
+
+Do not over-animate the interface.
+
+⸻
+
+14. PERFORMANCE
+
+Keep the game lightweight.
+
+Do not add unnecessarily large assets or expensive rendering systems.
+
+Character skins should be optimized for mobile.
+
+Avoid memory leaks from repeatedly loading character assets.
+
+⸻
+
+15. TEST EVERYTHING
+
+Before considering V6 complete, test:
+
+World system
+
+* score 0
+* score 299
+* score 300
+* score 599
+* score 600
+* score 900
+* score 1200
+* score 1500+
+
+Confirm the world changes at exactly 300-point intervals.
+
+Shop
+
+* open shop
+* view skins
+* purchase skin
+* insufficient coins
+* equip skin
+* unequip/switch to another skin
+* refresh browser
+* confirm purchases remain unlocked
+
+Gameplay
+
+* equipped skin appears correctly
+* collision remains identical
+* jumping remains identical
+* forks remain identical
+* power-ups remain functional
+* coins remain functional
+* high score remains functional
+
+Persistence
+
+Refresh the browser and confirm:
+
+* coin balance persists
+* purchased skins persist
+* equipped skin persists
+* high score persists
+
+⸻
+
+FINAL REQUIREMENT
+
+Implement all of this directly in the existing Fork Runner project.
+
+Do not merely explain the changes.
+
+Do not rebuild the project.
+
+Do not modify the working fork-generation safety system.
+
+The final result should feel like a natural progression of the existing game, with:
+
+300-point dynamic worlds + character customization + persistent coin shop.
